@@ -6,7 +6,7 @@ DB_NAME = "price_history.db"
 
 
 def init_db():
-    """Khởi tạo database nếu chưa tồn tại với các trường model_code, displayName, date và price."""
+    """Khởi tạo database nếu chưa tồn tại với các trường model_code, displayName, date, price và ctaType."""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute(
@@ -16,6 +16,7 @@ def init_db():
             displayName TEXT,
             date TEXT,
             price INTEGER,
+            ctaType TEXT,
             PRIMARY KEY (model_code, date)
         )
         """
@@ -24,11 +25,12 @@ def init_db():
     conn.close()
 
 
-def save_price_history(model_code, displayName, price):
+def save_price_history(model_code, displayName, price, ctaType):
     """
-    Lưu lịch sử giá của sản phẩm theo model_code.
+    Lưu lịch sử giá và tình trạng của sản phẩm theo model_code.
     Nếu chưa có dữ liệu của ngày hôm nay thì INSERT, còn nếu đã có:
       - Cập nhật giá nếu giá mới thấp hơn giá đã lưu.
+      - Cập nhật ctaType nếu có thay đổi.
     """
     today = datetime.now().strftime("%Y-%m-%d")
     price = int(price)  # Ép kiểu về INTEGER
@@ -38,7 +40,7 @@ def save_price_history(model_code, displayName, price):
 
     # Kiểm tra xem đã có dữ liệu cho model_code và ngày hôm nay chưa
     cursor.execute(
-        "SELECT price FROM price_history WHERE model_code = ? AND date = ?",
+        "SELECT price, ctaType FROM price_history WHERE model_code = ? AND date = ?",
         (model_code, today)
     )
     result = cursor.fetchone()
@@ -46,15 +48,15 @@ def save_price_history(model_code, displayName, price):
     if result is None:
         # Chưa có dữ liệu, thêm mới
         cursor.execute(
-            "INSERT INTO price_history (model_code, displayName, date, price) VALUES (?, ?, ?, ?)",
-            (model_code, displayName, today, price)
+            "INSERT INTO price_history (model_code, displayName, date, price, ctaType) VALUES (?, ?, ?, ?, ?)",
+            (model_code, displayName, today, price, ctaType)
         )
     else:
-        # Đã có dữ liệu, cập nhật displayName và cập nhật giá nếu cần
-        if price < result[0]:
+        # Đã có dữ liệu, cập nhật displayName, giá (nếu thấp hơn), và ctaType
+        if price < result[0] or ctaType != result[1]:
             cursor.execute(
-                "UPDATE price_history SET price = ?, displayName = ? WHERE model_code = ? AND date = ?",
-                (price, displayName, model_code, today)
+                "UPDATE price_history SET price = ?, displayName = ?, ctaType = ? WHERE model_code = ? AND date = ?",
+                (price, displayName, ctaType, model_code, today)
             )
         else:
             cursor.execute(
@@ -67,16 +69,16 @@ def save_price_history(model_code, displayName, price):
 
 
 def get_price_history(model_code):
-    """Lấy lịch sử giá (cùng với displayName) của sản phẩm theo model_code."""
+    """Lấy lịch sử giá và tình trạng (cùng với displayName) của sản phẩm theo model_code."""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT displayName, date, price FROM price_history WHERE model_code = ? ORDER BY date",
+        "SELECT displayName, date, price, ctaType FROM price_history WHERE model_code = ? ORDER BY date",
         (model_code,)
     )
     data = cursor.fetchall()
     conn.close()
-    return data  # Trả về list các tuple (displayName, date, price)
+    return data  # Trả về list các tuple (displayName, date, price, ctaType)
 
 
 def get_latest_price(model_code):
@@ -85,6 +87,19 @@ def get_latest_price(model_code):
     cursor = conn.cursor()
     cursor.execute(
         "SELECT price FROM price_history WHERE model_code = ? ORDER BY date DESC LIMIT 1",
+        (model_code,)
+    )
+    result = cursor.fetchone()
+    conn.close()
+    return result[0] if result else None
+
+
+def get_latest_ctaType(model_code):
+    """Lấy tình trạng mới nhất của sản phẩm từ cơ sở dữ liệu theo model_code."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT ctaType FROM price_history WHERE model_code = ? ORDER BY date DESC LIMIT 1",
         (model_code,)
     )
     result = cursor.fetchone()

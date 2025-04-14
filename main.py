@@ -98,16 +98,16 @@ URL_LIST = [
     "https://searchapi.samsung.com/v6/front/epp/v2/product/finder/global?type=08010000&siteCode=vn&start=1&num=99&sort=newest&onlyFilterInfoYN=N&keySummaryYN=N&companyCode=srv&pfType=G",
     "https://searchapi.samsung.com/v6/front/epp/v2/product/finder/global?type=07010000&siteCode=vn&start=1&num=99&sort=newest&onlyFilterInfoYN=N&keySummaryYN=N&companyCode=srv&pfType=G",
     "https://searchapi.samsung.com/v6/front/epp/v2/product/finder/global?type=08050000&siteCode=vn&start=1&num=99&sort=newest&onlyFilterInfoYN=N&keySummaryYN=N&companyCode=srv&pfType=G",
-    # "https://searchapi.samsung.com/v6/front/epp/v2/product/finder/global?type=08080000&siteCode=vn&start=1&num=99&sort=newest&onlyFilterInfoYN=N&keySummaryYN=N&companyCode=srv&pfType=G",
-    # "https://searchapi.samsung.com/v6/front/epp/v2/product/finder/global?type=08040000&siteCode=vn&start=1&num=99&sort=newest&onlyFilterInfoYN=N&keySummaryYN=N&companyCode=srv&pfType=G",
-    # "https://searchapi.samsung.com/v6/front/epp/v2/product/finder/global?type=08070000&siteCode=vn&start=1&num=99&sort=newest&onlyFilterInfoYN=N&keySummaryYN=N&companyCode=srv&pfType=G",
+    "https://searchapi.samsung.com/v6/front/epp/v2/product/finder/global?type=08080000&siteCode=vn&start=1&num=99&sort=newest&onlyFilterInfoYN=N&keySummaryYN=N&companyCode=srv&pfType=G",
+    "https://searchapi.samsung.com/v6/front/epp/v2/product/finder/global?type=08040000&siteCode=vn&start=1&num=99&sort=newest&onlyFilterInfoYN=N&keySummaryYN=N&companyCode=srv&pfType=G",
+    "https://searchapi.samsung.com/v6/front/epp/v2/product/finder/global?type=08070000&siteCode=vn&start=1&num=99&sort=newest&onlyFilterInfoYN=N&keySummaryYN=N&companyCode=srv&pfType=G",
 ]
 
 
 def load_products():
     """
     Tải danh sách sản phẩm từ nhiều URL, loại bỏ các sản phẩm trùng lặp và lọc các loại không cần thiết.
-    Kiểm tra thay đổi giá và thông báo.
+    Kiểm tra thay đổi giá và tình trạng, thông báo nếu có thay đổi.
     """
     unique_products = set()
     for url in URL_LIST:
@@ -133,18 +133,30 @@ def load_products():
                         category_subtype,
                     )
                     unique_products.add(product)
-                    # Kiểm tra và thông báo thay đổi giá
+                    # Kiểm tra và thông báo thay đổi giá hoặc tình trạng
                     if product.promotionPrice > 0:
                         latest_price = price_history.get_latest_price(product.modelCode)
+                        latest_ctaType = price_history.get_latest_ctaType(product.modelCode)
+
+                        # Kiểm tra thay đổi giá
                         if latest_price is not None and latest_price != product.promotionPrice:
                             # Giá thay đổi, hiển thị thông báo
                             if hasattr(ProductApp, 'instance'):  # Kiểm tra xem ProductApp đã khởi tạo chưa
                                 ProductApp.instance.show_price_change_notification(
                                     product, latest_price, product.promotionPrice
                                 )
-                        # Lưu giá mới vào lịch sử
+
+                        # Kiểm tra thay đổi tình trạng
+                        if latest_ctaType is not None and latest_ctaType != product.ctaType:
+                            # Tình trạng thay đổi, hiển thị thông báo
+                            if hasattr(ProductApp, 'instance'):
+                                ProductApp.instance.show_ctaType_change_notification(
+                                    product, latest_ctaType, product.ctaType
+                                )
+
+                        # Lưu giá và tình trạng mới vào lịch sử
                         price_history.save_price_history(
-                            product.modelCode, product.displayName, product.promotionPrice
+                            product.modelCode, product.displayName, product.promotionPrice, product.ctaType
                         )
     return sorted(
         unique_products,
@@ -223,7 +235,6 @@ class ProductApp(QWidget):
         self.timer = QTimer()
         self.timer.timeout.connect(self.on_refresh)
 
-
     def toggle_auto_refresh(self, state):
         """Bật hoặc tắt chế độ tự động cập nhật dựa trên trạng thái checkbox."""
         if state == Qt.Checked:
@@ -289,7 +300,7 @@ class ProductApp(QWidget):
                 "Sản phẩm có hàng!",
                 f"{product.displayName} đã có hàng. Mua ngay!",
                 QSystemTrayIcon.Information,
-                5000  # Thời gian hiển thị thông báo (5000 ms = 5 giây)
+                50000  # Thời gian hiển thị thông báo (50000 ms = 50 giây)
             )
 
     def on_button_click(self, product, button):
@@ -348,7 +359,6 @@ class ProductApp(QWidget):
         """Hiển thị biểu đồ lịch sử giá cho sản phẩm."""
         price_history.display_price_history_chart(model_code)
 
-    # Thêm các phương thức mới ở đây
     def check_high_discounts(self, products, discount_threshold=70):
         """
         Kiểm tra các sản phẩm có mức giảm giá cao và hiển thị thông báo.
@@ -379,6 +389,23 @@ class ProductApp(QWidget):
     def format_price(self, price):
         """Định dạng giá thành chuỗi có dấu phân cách hàng nghìn."""
         return f"{int(price):,}₫".replace(",", ".")
+
+    def show_ctaType_change_notification(self, product, old_ctaType, new_ctaType):
+        """Hiển thị thông báo khi tình trạng sản phẩm thay đổi."""
+        if self.tray_icon:
+            old_status = "Còn hàng" if old_ctaType == "whereToBuy" else "Hết hàng"
+            new_status = "Còn hàng" if new_ctaType == "whereToBuy" else "Hết hàng"
+            message = (
+                f"{product.displayName}\n"
+                f"Tình trạng cũ: {old_status}\n"
+                f"Tình trạng mới: {new_status}"
+            )
+            self.tray_icon.showMessage(
+                "Tình trạng sản phẩm thay đổi",
+                message,
+                QSystemTrayIcon.Information,
+                10000  # Hiển thị trong 10 giây
+            )
 
     def show_price_change_notification(self, product, old_price, new_price):
         """Hiển thị thông báo khi giá sản phẩm thay đổi."""
