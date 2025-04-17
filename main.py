@@ -397,8 +397,7 @@ class ProductApp(QWidget):
             new_status = "Còn hàng" if new_ctaType == "whereToBuy" else "Hết hàng"
             message = (
                 f"{product.displayName}\n"
-                f"Tình trạng cũ: {old_status}\n"
-                f"Tình trạng mới: {new_status}"
+                f"Tình trạng: {new_status}"
             )
             self.tray_icon.showMessage(
                 "Tình trạng sản phẩm thay đổi",
@@ -422,7 +421,7 @@ class ProductApp(QWidget):
                 f"Giá sản phẩm thay đổi ({change_direction})",
                 message,
                 QSystemTrayIcon.Information,
-                10000  # Hiển thị trong 10 giây
+                5000  # Hiển thị trong 5 giây
             )
 
 

@@ -110,6 +110,7 @@ def get_latest_ctaType(model_code):
 def display_price_history_chart(model_code):
     """
     Hiển thị lịch sử giá của sản phẩm theo model_code dưới dạng biểu đồ đường.
+    Chỉ hiển thị giá tại các mốc giá thay đổi.
     """
     history = get_price_history(model_code)
 
@@ -140,15 +141,18 @@ def display_price_history_chart(model_code):
     # Xoay nhãn ngày để dễ đọc
     plt.xticks(rotation=45)
 
-    # Hiển thị giá trị tại mỗi điểm
+    # Hiển thị giá trị chỉ tại các điểm giá thay đổi
+    prev_price = None
     for i, price in enumerate(prices):
-        plt.annotate(
-            f"{price:,.0f}".replace(',', '.'),
-            (dates[i], prices[i]),
-            textcoords="offset points",
-            xytext=(0, 10),
-            ha='center'
-        )
+        if prev_price is None or price != prev_price:
+            plt.annotate(
+                f"{price:,.0f}".replace(',', '.'),
+                (dates[i], prices[i]),
+                textcoords="offset points",
+                xytext=(0, 10),
+                ha='center'
+            )
+        prev_price = price
 
     plt.tight_layout()
     plt.show()
