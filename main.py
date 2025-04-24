@@ -1,5 +1,6 @@
 import requests
 import html
+import time
 import matplotlib.pyplot as plt
 from PyQt5 import QtWidgets, QtGui
 from PyQt5.QtCore import QTimer, QUrl, Qt
@@ -320,7 +321,9 @@ class ProductApp(QWidget):
     def on_refresh(self):
         """Làm mới dữ liệu sản phẩm và kiểm tra trạng thái thông báo."""
         old_products = self.products if hasattr(self, 'products') else []
+        start_time = time.time()
         self.products = load_products()
+        print(f"Thời gian tải: {time.time() - start_time:.2f} giây")
 
         # Kiểm tra các sản phẩm giảm giá cao
         new_products = [p for p in self.products if not any(op.modelCode == p.modelCode for op in old_products)]
