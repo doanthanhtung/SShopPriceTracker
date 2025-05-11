@@ -53,7 +53,7 @@ def save_price_history(model_code, displayName, price, ctaType):
         )
     else:
         # Đã có dữ liệu, cập nhật displayName, giá (nếu thấp hơn), và ctaType
-        if price < result[0] or ctaType != result[1]:
+        if price != result[0] or ctaType != result[1]:
             cursor.execute(
                 "UPDATE price_history SET price = ?, displayName = ?, ctaType = ? WHERE model_code = ? AND date = ?",
                 (price, displayName, ctaType, model_code, today)
