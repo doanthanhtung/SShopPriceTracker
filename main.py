@@ -19,20 +19,21 @@ from PyQt5.QtWidgets import (
 )
 import price_history
 
+
 class Product:
     def __init__(
-        self,
-        displayName,
-        formattedPriceSave,
-        modelCode,
-        originPdpUrl,
-        pdpUrl,
-        price,
-        priceDisplay,
-        promotionPrice,
-        ctaType,
-        pviSubtypeName,
-        categorySubTypeEngName,
+            self,
+            displayName,
+            formattedPriceSave,
+            modelCode,
+            originPdpUrl,
+            pdpUrl,
+            price,
+            priceDisplay,
+            promotionPrice,
+            ctaType,
+            pviSubtypeName,
+            categorySubTypeEngName,
     ):
         self.displayName = html.unescape(displayName)
         self.formattedPriceSave = formattedPriceSave
@@ -49,10 +50,10 @@ class Product:
     def __eq__(self, other):
         if isinstance(other, Product):
             return (
-                self.displayName == other.displayName
-                and self.promotionPrice == other.promotionPrice
-                and self.get_discount_percentage() == other.get_discount_percentage()
-                and self.ctaType == other.ctaType
+                    self.displayName == other.displayName
+                    and self.promotionPrice == other.promotionPrice
+                    and self.get_discount_percentage() == other.get_discount_percentage()
+                    and self.ctaType == other.ctaType
             )
         return False
 
@@ -73,6 +74,7 @@ class Product:
             return "Còn hàng"
         return self.ctaType
 
+
 def fetch_product_data(url, timeout=10):
     try:
         response = requests.get(url, timeout=timeout)
@@ -81,6 +83,7 @@ def fetch_product_data(url, timeout=10):
     except requests.RequestException as e:
         print(f"Có lỗi xảy ra: {e}")
     return None
+
 
 URL_LIST = [
     "https://searchapi.samsung.com/v6/front/epp/v2/product/finder/global?type=01010000&siteCode=vn&start=1&num=99&sort=newest&onlyFilterInfoYN=N&keySummaryYN=N&companyCode=srv&pfType=G",
@@ -94,9 +97,10 @@ URL_LIST = [
     "https://searchapi.samsung.com/v6/front/epp/v2/product/finder/global?type=08080000&siteCode=vn&start=1&num=99&sort=newest&onlyFilterInfoYN=N&keySummaryYN=N&companyCode=srv&pfType=G",
     "https://searchapi.samsung.com/v6/front/epp/v2/product/finder/global?type=08040000&siteCode=vn&start=1&num=99&sort=newest&onlyFilterInfoYN=N&keySummaryYN=N&companyCode=srv&pfType=G",
     "https://searchapi.samsung.com/v6/front/epp/v2/product/finder/global?type=08070000&siteCode=vn&start=1&num=99&sort=newest&onlyFilterInfoYN=N&keySummaryYN=N&companyCode=srv&pfType=G",
-    "https://searchapi.samsung.com/v6/front/epp/v2/product/finder/global?type=09010000&siteCode=vn&start=1&num=12&sort=newest&onlyFilterInfoYN=N&keySummaryYN=N&companyCode=srv&pfType=G",
-    "https://searchapi.samsung.com/v6/front/epp/v2/product/finder/global?type=01040000&siteCode=vn&start=1&num=12&sort=newest&onlyFilterInfoYN=N&keySummaryYN=N&companyCode=srv&pfType=G",
+    "https://searchapi.samsung.com/v6/front/epp/v2/product/finder/global?type=09010000&siteCode=vn&start=1&num=99&sort=newest&onlyFilterInfoYN=N&keySummaryYN=N&companyCode=srv&pfType=G",
+    "https://searchapi.samsung.com/v6/front/epp/v2/product/finder/global?type=01040000&siteCode=vn&start=1&num=99&sort=newest&onlyFilterInfoYN=N&keySummaryYN=N&companyCode=srv&pfType=G",
 ]
+
 
 def load_products():
     unique_products = set()
@@ -124,18 +128,23 @@ def load_products():
                     )
                     unique_products.add(product)
                     if product.promotionPrice > 0:
+                        # Kiểm tra sản phẩm đã tồn tại trong database chưa
                         latest_price = price_history.get_latest_price(product.modelCode)
-                        latest_ctaType = price_history.get_latest_ctaType(product.modelCode)
-                        if latest_price is not None and latest_price != product.promotionPrice:
+                        if latest_price is None:  # Sản phẩm mới, chưa có trong database
                             if hasattr(ProductApp, 'instance'):
-                                ProductApp.instance.show_price_change_notification(
-                                    product, latest_price, product.promotionPrice
-                                )
-                        if latest_ctaType is not None and latest_ctaType != product.ctaType:
-                            if hasattr(ProductApp, 'instance'):
-                                ProductApp.instance.show_ctaType_change_notification(
-                                    product, latest_ctaType, product.ctaType
-                                )
+                                ProductApp.instance.show_new_product_notification(product)
+                        else:  # Sản phẩm đã tồn tại, kiểm tra thay đổi giá/tình trạng
+                            latest_ctaType = price_history.get_latest_ctaType(product.modelCode)
+                            if latest_price != product.promotionPrice:
+                                if hasattr(ProductApp, 'instance'):
+                                    ProductApp.instance.show_price_change_notification(
+                                        product, latest_price, product.promotionPrice
+                                    )
+                            if latest_ctaType is not None and latest_ctaType != product.ctaType:
+                                if hasattr(ProductApp, 'instance'):
+                                    ProductApp.instance.show_ctaType_change_notification(
+                                        product, latest_ctaType, product.ctaType
+                                    )
                         price_history.save_price_history(
                             product.modelCode, product.displayName, product.promotionPrice, product.ctaType
                         )
@@ -143,6 +152,7 @@ def load_products():
         unique_products,
         key=lambda x: (-x.get_discount_percentage(), x.price, x.get_cta_display() != "Còn hàng"),
     )
+
 
 class ProductApp(QWidget):
     instance = None
@@ -247,23 +257,23 @@ class ProductApp(QWidget):
             p
             for p in self.products
             if (selected_cta == "Tất cả" or p.get_cta_display() == selected_cta)
-            and (
-                selected_category == "Tất cả"
-                or (p.categorySubTypeEngName and p.categorySubTypeEngName == selected_category)
-            )
-            and (search_text in p.displayName.lower())
+               and (
+                       selected_category == "Tất cả"
+                       or (p.categorySubTypeEngName and p.categorySubTypeEngName == selected_category)
+               )
+               and (search_text in p.displayName.lower())
         ]
 
         for row, product in enumerate(filtered_products):
             self.table.insertRow(row)
             color = QtGui.QColor("green") if product.get_cta_display() == "Còn hàng" else QtGui.QColor("red")
             for col, value in enumerate(
-                [
-                    product.displayName,
-                    product.priceDisplay,
-                    f"{product.get_discount_percentage()}%",
-                    product.get_cta_display(),
-                ]
+                    [
+                        product.displayName,
+                        product.priceDisplay,
+                        f"{product.get_discount_percentage()}%",
+                        product.get_cta_display(),
+                    ]
             ):
                 item = QTableWidgetItem(value)
                 item.setForeground(color)
@@ -330,7 +340,7 @@ class ProductApp(QWidget):
 
     def check_high_discounts(self, products, discount_threshold=70):
         high_discount_products = [p for p in products if p.get_discount_percentage() >= discount_threshold
-                                 and p.get_cta_display() == "Còn hàng"]
+                                  and p.get_cta_display() == "Còn hàng"]
         for product in high_discount_products:
             self.show_discount_notification(product)
 
@@ -380,12 +390,28 @@ class ProductApp(QWidget):
                 5000
             )
 
+    def show_new_product_notification(self, product):
+        if self.tray_icon:
+            message = (
+                f"Sản phẩm mới: {product.displayName}\n"
+                f"Giá: {self.format_price(product.promotionPrice)}\n"
+                f"Tình trạng: {product.get_cta_display()}"
+            )
+            self.tray_icon.showMessage(
+                "Sản phẩm mới được thêm",
+                message,
+                QSystemTrayIcon.Information,
+                10000
+            )
+
+
 def main():
     import sys
     app = QApplication(sys.argv)
     main_win = ProductApp()
     main_win.show()
     sys.exit(app.exec_())
+
 
 if __name__ == "__main__":
     main()
