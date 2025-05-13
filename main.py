@@ -16,7 +16,7 @@ from PyQt5.QtWidgets import (
     QApplication,
     QSystemTrayIcon,
     QLineEdit,
-    QMainWindow,  # Thay đổi từ QWidget thành QMainWindow để hỗ trợ QStatusBar
+    QMainWindow,
     QStatusBar,
 )
 import price_history
@@ -72,7 +72,7 @@ class Product:
     def get_cta_display(self):
         if self.ctaType == "outOfStock":
             return "Hết hàng"
-        elif self.ctaType == "whereToBuy":
+        elif self.ctaType in ["whereToBuy", "preOrder"]:
             return "Còn hàng"
         return self.ctaType
 
@@ -163,7 +163,7 @@ def load_products():
     )
 
 
-class ProductApp(QMainWindow):  # Thay đổi từ QWidget thành QMainWindow
+class ProductApp(QMainWindow):
     instance = None
 
     def __init__(self):
@@ -235,10 +235,12 @@ class ProductApp(QMainWindow):  # Thay đổi từ QWidget thành QMainWindow
         self.table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
         layout.addWidget(self.table)
 
-        # Thêm QStatusBar
+        # Thêm QStatusBar và QLabel cho thông báo có màu
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
-        self.status_bar.showMessage("Đang tải dữ liệu từ samsung.com...", 0)
+        self.status_label = QLabel("Đang tải dữ liệu từ samsung.com...")
+        self.status_label.setStyleSheet("color: blue;")  # Màu xanh khi đang tải
+        self.status_bar.addWidget(self.status_label)  # Thêm QLabel vào QStatusBar
 
         self.products = []
         self.on_refresh()  # Khởi động lần tải đầu tiên
@@ -321,7 +323,8 @@ class ProductApp(QMainWindow):  # Thay đổi từ QWidget thành QMainWindow
 
     def on_refresh(self):
         self.refresh_button.setEnabled(False)
-        self.status_bar.showMessage("Đang tải dữ liệu từ samsung.com...", 0)
+        self.status_label.setText("Đang tải dữ liệu từ samsung.com...")
+        self.status_label.setStyleSheet("color: blue;")  # Màu xanh khi đang tải
         self.worker = Worker()
         self.worker.finished.connect(self.handle_load_products_result)
         self.worker.start()
@@ -339,7 +342,9 @@ class ProductApp(QMainWindow):  # Thay đổi từ QWidget thành QMainWindow
                 product = self.products[row]
                 self.check_product_availability(product, button)
         self.refresh_button.setEnabled(True)
-        self.status_bar.showMessage("Đã tải xong dữ liệu từ samsung.com", 3000)  # Hiển thị trong 3 giây
+        self.status_label.setText("Đã tải xong dữ liệu từ samsung.com")
+        self.status_label.setStyleSheet("color: green;")  # Màu xanh lá khi tải xong
+        QTimer.singleShot(3000, lambda: self.status_label.setText(""))  # Xóa sau 3 giây
 
     def update_filters(self):
         categories = {"Tất cả"}
