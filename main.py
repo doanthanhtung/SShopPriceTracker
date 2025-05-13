@@ -16,6 +16,8 @@ from PyQt5.QtWidgets import (
     QApplication,
     QSystemTrayIcon,
     QLineEdit,
+    QMainWindow,  # Thay đổi từ QWidget thành QMainWindow để hỗ trợ QStatusBar
+    QStatusBar,
 )
 import price_history
 
@@ -136,12 +138,11 @@ def load_products():
                     )
                     unique_products.add(product)
                     if product.promotionPrice > 0:
-                        # Kiểm tra sản phẩm đã tồn tại trong database chưa
                         latest_price = price_history.get_latest_price(product.modelCode)
-                        if latest_price is None:  # Sản phẩm mới, chưa có trong database
+                        if latest_price is None:
                             if hasattr(ProductApp, 'instance'):
                                 ProductApp.instance.show_new_product_notification(product)
-                        else:  # Sản phẩm đã tồn tại, kiểm tra thay đổi giá/tình trạng
+                        else:
                             latest_ctaType = price_history.get_latest_ctaType(product.modelCode)
                             if latest_price != product.promotionPrice:
                                 if hasattr(ProductApp, 'instance'):
@@ -162,7 +163,7 @@ def load_products():
     )
 
 
-class ProductApp(QWidget):
+class ProductApp(QMainWindow):  # Thay đổi từ QWidget thành QMainWindow
     instance = None
 
     def __init__(self):
@@ -186,9 +187,13 @@ class ProductApp(QWidget):
     def init_ui(self):
         self.setWindowTitle("Danh sách sản phẩm")
         self.setGeometry(100, 100, 900, 500)
-        layout = QVBoxLayout()
 
-        # Thêm thanh tìm kiếm với debouncing
+        # Tạo widget trung tâm và layout
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        layout = QVBoxLayout(central_widget)
+
+        # Thanh tìm kiếm
         self.search_bar = QLineEdit()
         self.search_bar.setPlaceholderText("Tìm kiếm theo tên sản phẩm...")
         self.search_timer = QTimer()
@@ -230,14 +235,18 @@ class ProductApp(QWidget):
         self.table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
         layout.addWidget(self.table)
 
-        self.setLayout(layout)
+        # Thêm QStatusBar
+        self.status_bar = QStatusBar()
+        self.setStatusBar(self.status_bar)
+        self.status_bar.showMessage("Đang tải dữ liệu từ samsung.com...", 0)
+
         self.products = []
         self.on_refresh()  # Khởi động lần tải đầu tiên
         self.timer = QTimer()
         self.timer.timeout.connect(self.on_refresh)
 
     def start_search_timer(self):
-        self.search_timer.start(500)  # Chờ 500ms trước khi gọi update_table
+        self.search_timer.start(500)
 
     def toggle_auto_refresh(self, state):
         if state == Qt.Checked:
@@ -311,7 +320,8 @@ class ProductApp(QWidget):
                 button.setText("Thông báo khi có hàng")
 
     def on_refresh(self):
-        self.refresh_button.setEnabled(False)  # Vô hiệu hóa nút làm mới
+        self.refresh_button.setEnabled(False)
+        self.status_bar.showMessage("Đang tải dữ liệu từ samsung.com...", 0)
         self.worker = Worker()
         self.worker.finished.connect(self.handle_load_products_result)
         self.worker.start()
@@ -328,7 +338,8 @@ class ProductApp(QWidget):
             if button and button.text() == "Hủy thông báo":
                 product = self.products[row]
                 self.check_product_availability(product, button)
-        self.refresh_button.setEnabled(True)  # Kích hoạt lại nút làm mới
+        self.refresh_button.setEnabled(True)
+        self.status_bar.showMessage("Đã tải xong dữ liệu từ samsung.com", 3000)  # Hiển thị trong 3 giây
 
     def update_filters(self):
         categories = {"Tất cả"}
