@@ -2,7 +2,7 @@ import requests
 import html
 import matplotlib.pyplot as plt
 from PyQt5 import QtWidgets, QtGui
-from PyQt5.QtCore import QTimer, QUrl, Qt
+from PyQt5.QtCore import QTimer, QUrl, Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtWidgets import (
     QTableWidget,
@@ -100,6 +100,14 @@ URL_LIST = [
     "https://searchapi.samsung.com/v6/front/epp/v2/product/finder/global?type=09010000&siteCode=vn&start=1&num=99&sort=newest&onlyFilterInfoYN=N&keySummaryYN=N&companyCode=srv&pfType=G",
     "https://searchapi.samsung.com/v6/front/epp/v2/product/finder/global?type=01040000&siteCode=vn&start=1&num=99&sort=newest&onlyFilterInfoYN=N&keySummaryYN=N&companyCode=srv&pfType=G",
 ]
+
+
+class Worker(QThread):
+    finished = pyqtSignal(list)
+
+    def run(self):
+        products = load_products()
+        self.finished.emit(products)
 
 
 def load_products():
@@ -223,11 +231,8 @@ class ProductApp(QWidget):
         layout.addWidget(self.table)
 
         self.setLayout(layout)
-        self.products = load_products()
-        print(f"Số sản phẩm: {len(self.products)}")  # Kiểm tra số lượng sản phẩm
-        self.update_filters()
-        self.update_table()
-        self.check_high_discounts(self.products)
+        self.products = []
+        self.on_refresh()  # Khởi động lần tải đầu tiên
         self.timer = QTimer()
         self.timer.timeout.connect(self.on_refresh)
 
@@ -306,8 +311,14 @@ class ProductApp(QWidget):
                 button.setText("Thông báo khi có hàng")
 
     def on_refresh(self):
+        self.refresh_button.setEnabled(False)  # Vô hiệu hóa nút làm mới
+        self.worker = Worker()
+        self.worker.finished.connect(self.handle_load_products_result)
+        self.worker.start()
+
+    def handle_load_products_result(self, products):
         old_products = self.products if hasattr(self, 'products') else []
-        self.products = load_products()
+        self.products = products
         new_products = [p for p in self.products if not any(op.modelCode == p.modelCode for op in old_products)]
         self.check_high_discounts(new_products)
         self.update_filters()
@@ -317,6 +328,7 @@ class ProductApp(QWidget):
             if button and button.text() == "Hủy thông báo":
                 product = self.products[row]
                 self.check_product_availability(product, button)
+        self.refresh_button.setEnabled(True)  # Kích hoạt lại nút làm mới
 
     def update_filters(self):
         categories = {"Tất cả"}
@@ -375,13 +387,12 @@ class ProductApp(QWidget):
 
     def show_price_change_notification(self, product, old_price, new_price):
         if self.tray_icon:
-            change_direction = "giảm" if new_price < old_price else "tăng"
+            change_direction = "Giảm" if new_price < old_price else "Tăng"
             change_amount = abs(new_price - old_price)
             message = (
                 f"{product.displayName}\n"
-                f"Giá cũ: {self.format_price(old_price)}\n"
-                f"Giá mới: {self.format_price(new_price)}\n"
-                f"Thay đổi: {change_direction} {self.format_price(change_amount)}"
+                f"Giá: {self.format_price(new_price)}\n"
+                f"{change_direction} {self.format_price(change_amount)}"
             )
             self.tray_icon.showMessage(
                 f"Giá sản phẩm thay đổi ({change_direction})",
