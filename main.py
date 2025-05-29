@@ -20,6 +20,35 @@ from PyQt5.QtWidgets import (
     QStatusBar,
 )
 import price_history
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+# Cấu hình email
+EMAIL_SENDER = "luongphongtrung01@gmail.com"  # Thay bằng email của bạn
+EMAIL_PASSWORD = "pdtu qgjf jvss igkq"  # Thay bằng mật khẩu ứng dụng của bạn
+EMAIL_RECEIVERS = ["doanthanhtung.pc@gmail.com"]  # Danh sách email nhận thông báo
+SMTP_SERVER = "smtp.gmail.com"  # Server SMTP (ví dụ: Gmail)
+SMTP_PORT = 587  # Cổng SMTP
+
+
+def send_email(subject, body):
+    """Gửi email thông báo đến danh sách email nhận."""
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = EMAIL_SENDER
+        msg['To'] = ", ".join(EMAIL_RECEIVERS)
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.starttls()
+        server.login(EMAIL_SENDER, EMAIL_PASSWORD)
+        server.sendmail(EMAIL_SENDER, EMAIL_RECEIVERS, msg.as_string())
+        server.quit()
+        print(f"Đã gửi email: {subject}")
+    except Exception as e:
+        print(f"Lỗi khi gửi email: {e}")
 
 
 class Product:
@@ -170,6 +199,7 @@ class ProductApp(QMainWindow):
         super().__init__()
         ProductApp.instance = self
         self.tray_icon = None
+        self.notifications = []  # Danh sách lưu trữ các thông báo
         self.init_tray_icon()
         self.init_ui()
 
@@ -188,12 +218,10 @@ class ProductApp(QMainWindow):
         self.setWindowTitle("Danh sách sản phẩm")
         self.setGeometry(100, 100, 900, 500)
 
-        # Tạo widget trung tâm và layout
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         layout = QVBoxLayout(central_widget)
 
-        # Thanh tìm kiếm
         self.search_bar = QLineEdit()
         self.search_bar.setPlaceholderText("Tìm kiếm theo tên sản phẩm...")
         self.search_timer = QTimer()
@@ -203,29 +231,24 @@ class ProductApp(QMainWindow):
         layout.addWidget(QLabel("Tìm kiếm:"))
         layout.addWidget(self.search_bar)
 
-        # Bộ lọc theo danh mục
         self.category_filter = QComboBox()
         self.category_filter.currentIndexChanged.connect(self.update_table)
         layout.addWidget(QLabel("Lọc theo danh mục:"))
         layout.addWidget(self.category_filter)
 
-        # Bộ lọc theo tình trạng sản phẩm
         self.cta_filter = QComboBox()
         self.cta_filter.currentIndexChanged.connect(self.update_table)
         layout.addWidget(QLabel("Lọc theo tình trạng:"))
         layout.addWidget(self.cta_filter)
 
-        # Nút làm mới dữ liệu
         self.refresh_button = QPushButton("Làm mới")
         self.refresh_button.clicked.connect(self.on_refresh)
         layout.addWidget(self.refresh_button)
 
-        # Checkbox tự động cập nhật
         self.auto_refresh_checkbox = QCheckBox("Tự động cập nhật mỗi 5 phút")
         self.auto_refresh_checkbox.stateChanged.connect(self.toggle_auto_refresh)
         layout.addWidget(self.auto_refresh_checkbox)
 
-        # Bảng hiển thị sản phẩm
         self.table = QTableWidget()
         self.table.setColumnCount(6)
         self.table.setHorizontalHeaderLabels(
@@ -235,15 +258,14 @@ class ProductApp(QMainWindow):
         self.table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
         layout.addWidget(self.table)
 
-        # Thêm QStatusBar và QLabel cho thông báo có màu
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
         self.status_label = QLabel("Đang tải dữ liệu từ samsung.com...")
-        self.status_label.setStyleSheet("color: blue;")  # Màu xanh khi đang tải
-        self.status_bar.addWidget(self.status_label)  # Thêm QLabel vào QStatusBar
+        self.status_label.setStyleSheet("color: blue;")
+        self.status_bar.addWidget(self.status_label)
 
         self.products = []
-        self.on_refresh()  # Khởi động lần tải đầu tiên
+        self.on_refresh()
         self.timer = QTimer()
         self.timer.timeout.connect(self.on_refresh)
 
@@ -313,7 +335,7 @@ class ProductApp(QMainWindow):
 
     def on_button_click(self, product, button):
         if product.get_cta_display() == "Còn hàng":
-            QDesktopServices.openUrl(QUrl("http://samsung.com/" + product.pdpUrl))
+            QDesktopServices.openUrl(QUrl("http://samsung.com" + product.pdpUrl))
         else:
             if button.text() == "Thông báo khi có hàng":
                 button.setText("Hủy thông báo")
@@ -324,7 +346,8 @@ class ProductApp(QMainWindow):
     def on_refresh(self):
         self.refresh_button.setEnabled(False)
         self.status_label.setText("Đang tải dữ liệu từ samsung.com...")
-        self.status_label.setStyleSheet("color: blue;")  # Màu xanh khi đang tải
+        self.status_label.setStyleSheet("color: blue;")
+        self.notifications = []  # Xóa danh sách thông báo trước khi làm mới
         self.worker = Worker()
         self.worker.finished.connect(self.handle_load_products_result)
         self.worker.start()
@@ -343,8 +366,17 @@ class ProductApp(QMainWindow):
                 self.check_product_availability(product, button)
         self.refresh_button.setEnabled(True)
         self.status_label.setText("Đã tải xong dữ liệu từ samsung.com")
-        self.status_label.setStyleSheet("color: green;")  # Màu xanh lá khi tải xong
-        QTimer.singleShot(3000, lambda: self.status_label.setText(""))  # Xóa sau 3 giây
+        self.status_label.setStyleSheet("color: green;")
+        QTimer.singleShot(3000, lambda: self.status_label.setText(""))
+
+        # Gửi email tổng hợp nếu có thông báo
+        if self.notifications:
+            email_subject = "Tổng hợp thay đổi sản phẩm Samsung"
+            email_body = "Dưới đây là các thay đổi sản phẩm mới nhất:\n\n"
+            for notification in self.notifications:
+                email_body += notification + "\n" + "-" * 50 + "\n"
+            email_body += "\nXem chi tiết tại: http://samsung.com"
+            send_email(email_subject, email_body)
 
     def update_filters(self):
         categories = {"Tất cả"}
@@ -382,9 +414,16 @@ class ProductApp(QMainWindow):
                 QSystemTrayIcon.Information,
                 10000
             )
-
-    def format_price(self, price):
-        return f"{int(price):,}₫".replace(",", ".")
+            # Thêm thông báo giảm giá vào danh sách
+            notification = (
+                f"Giảm giá lớn ({discount}%):\n"
+                f"Sản phẩm: {product.displayName}\n"
+                f"Giảm giá: {discount}%\n"
+                f"Giá gốc: {product.priceDisplay}\n"
+                f"Giá khuyến mãi: {self.format_price(product.promotionPrice)}\n"
+                f"Link: http://samsung.com{product.pdpUrl}"
+            )
+            self.notifications.append(notification)
 
     def show_ctaType_change_notification(self, product, old_ctaType, new_ctaType):
         if self.tray_icon:
@@ -400,6 +439,15 @@ class ProductApp(QMainWindow):
                 QSystemTrayIcon.Information,
                 10000
             )
+            # Thêm thông báo thay đổi tình trạng vào danh sách
+            notification = (
+                f"Tình trạng sản phẩm thay đổi:\n"
+                f"Sản phẩm: {product.displayName}\n"
+                # f"Tình trạng cũ: {old_status}\n"
+                f"Tình trạng mới: {new_status}\n"
+                f"Link: http://samsung.com{product.pdpUrl}"
+            )
+            self.notifications.append(notification)
 
     def show_price_change_notification(self, product, old_price, new_price):
         if self.tray_icon:
@@ -416,6 +464,15 @@ class ProductApp(QMainWindow):
                 QSystemTrayIcon.Information,
                 5000
             )
+            # Thêm thông báo thay đổi giá vào danh sách
+            notification = (
+                f"Giá sản phẩm thay đổi ({change_direction}):\n"
+                f"Sản phẩm: {product.displayName}\n"
+                f"Giá mới: {self.format_price(new_price)}\n"
+                f"{change_direction}: {self.format_price(change_amount)}\n"
+                f"Link: http://samsung.com{product.pdpUrl}"
+            )
+            self.notifications.append(notification)
 
     def show_new_product_notification(self, product):
         if self.tray_icon:
@@ -430,6 +487,18 @@ class ProductApp(QMainWindow):
                 QSystemTrayIcon.Information,
                 10000
             )
+            # Thêm thông báo sản phẩm mới vào danh sách
+            notification = (
+                f"Sản phẩm mới:\n"
+                f"Sản phẩm: {product.displayName}\n"
+                f"Giá: {self.format_price(product.promotionPrice)}\n"
+                f"Tình trạng: {product.get_cta_display()}\n"
+                f"Link: http://samsung.com{product.pdpUrl}"
+            )
+            self.notifications.append(notification)
+
+    def format_price(self, price):
+        return f"{int(price):,}₫".replace(",", ".")
 
 
 def main():
