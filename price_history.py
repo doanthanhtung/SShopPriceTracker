@@ -1,6 +1,7 @@
 import sqlite3
 from datetime import datetime
 import matplotlib.pyplot as plt
+import statistics
 
 DB_NAME = "price_history.db"
 
@@ -105,6 +106,15 @@ def get_latest_ctaType(model_code):
     result = cursor.fetchone()
     conn.close()
     return result[0] if result else None
+
+
+def get_average_price(model_code):
+    """Tính giá trung bình của sản phẩm dựa trên lịch sử giá."""
+    history = get_price_history(model_code)
+    if not history:
+        return None
+    prices = [row[2] for row in history]
+    return statistics.mean(prices)
 
 
 def display_price_history_chart(model_code):
