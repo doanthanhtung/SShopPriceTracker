@@ -439,49 +439,53 @@ class ProductApp(QMainWindow):
             email_body = ""
             images = []
 
-            # Phân loại thông báo
+            # Lọc và sắp xếp thông báo
             price_change_notifications = [
-                n for n in self.notifications if "Giá sản phẩm thay đổi (Giảm dưới giá trung bình)" in n
+                (message, model_code) for message, model_code in self.notifications
+                if "Giá sản phẩm thay đổi (Giảm dưới giá trung bình)" in message
             ]
-            new_product_notifications = [n for n in self.notifications if "Sản phẩm mới" in n]
+            new_product_notifications = [
+                (message, model_code) for message, model_code in self.notifications
+                if "Sản phẩm mới" in message
+            ]
 
-            # Sắp xếp theo mức độ "deal hời" (phần trăm giảm giá so với giá trung bình)
+            # Sắp xếp thông báo giảm giá theo phần trăm giảm
             price_change_notifications.sort(
-                key=lambda x: float(x.split("Giảm giá so với giá trung bình:")[1].split("%")[0].strip()),
+                key=lambda x: float(x[0].split("Giảm giá so với giá trung bình:")[1].split("%")[0].strip()),
                 reverse=True
             )
 
+            # Gộp các thông báo đã sắp xếp
             sorted_notifications = price_change_notifications + new_product_notifications
 
-            for notification in sorted_notifications:
-                lines = notification.split("\n")
+            # Tạo nội dung email
+            for message, model_code in sorted_notifications:
+                lines = message.split("\n")
                 html_notification = "<h3>" + lines[0] + "</h3>"
                 for line in lines[1:]:
                     if line and line != "-" * 50:
                         html_notification += "<p>" + line + "</p>"
 
-                if "Giá sản phẩm thay đổi (Giảm dưới giá trung bình)" in notification:
-                    product_name = lines[1].split(":")[1].strip()
-                    model_code = next((p.modelCode for p in self.products if p.displayName == product_name), None)
-                    if model_code:
-                        image_path, cid = self.generate_price_history_image(model_code)
-                        if image_path and cid:
-                            images.append((image_path, cid))
-                            html_notification += f'<p><img src="cid:{cid}" alt="Lịch sử giá {model_code}"></p>'
-                        else:
-                            html_notification += "<p>Không có dữ liệu lịch sử giá.</p>"
+                # Thêm biểu đồ lịch sử giá cho thông báo giảm giá
+                if "Giá sản phẩm thay đổi (Giảm dưới giá trung bình)" in message:
+                    image_path, cid = self.generate_price_history_image(model_code)
+                    if image_path and cid:
+                        images.append((image_path, cid))
+                        html_notification += f'<p><img src="cid:{cid}" alt="Lịch sử giá {model_code}"></p>'
                     else:
-                        print(f"Không tìm thấy model_code cho sản phẩm: {product_name}")
-                        html_notification += "<p>Không tìm thấy mã sản phẩm để tạo biểu đồ.</p>"
+                        html_notification += "<p>Không có dữ liệu lịch sử giá.</p>"
 
                 html_notification += "<hr>"
                 email_body += html_notification
 
-            send_email(email_subject, email_body, images)
+            # Gửi email nếu có thông báo
+            if sorted_notifications:
+                send_email(email_subject, email_body, images)
 
-            for image_path, _ in images:
-                if os.path.exists(image_path):
-                    os.remove(image_path)
+                # Xóa các file ảnh tạm
+                for image_path, _ in images:
+                    if os.path.exists(image_path):
+                        os.remove(image_path)
 
     def update_filters(self):
         categories = {"Tất cả"}
@@ -519,7 +523,7 @@ class ProductApp(QMainWindow):
                 QSystemTrayIcon.Information,
                 10000
             )
-            notification = (
+            notification_message = (
                 f"Giảm giá lớn ({discount}%):\n"
                 f"Sản phẩm: {product.displayName}\n"
                 f"Giảm giá: {discount}%\n"
@@ -527,7 +531,7 @@ class ProductApp(QMainWindow):
                 f"Giá khuyến mãi: {self.format_price(product.promotionPrice)}\n"
                 f"Link: http://samsung.com{product.pdpUrl}"
             )
-            self.notifications.append(notification)
+            self.notifications.append((notification_message, product.modelCode))
 
     def show_ctaType_change_notification(self, product, old_ctaType, new_ctaType):
         if self.tray_icon:
@@ -544,13 +548,13 @@ class ProductApp(QMainWindow):
                     QSystemTrayIcon.Information,
                     10000
                 )
-                notification = (
+                notification_message = (
                     f"Tình trạng sản phẩm thay đổi:\n"
                     f"Sản phẩm: {product.displayName}\n"
                     f"Tình trạng mới: {new_status}\n"
                     f"Link: http://samsung.com{product.pdpUrl}"
                 )
-                self.notifications.append(notification)
+                self.notifications.append((notification_message, product.modelCode))
 
     def show_price_change_notification(self, product, old_price, new_price, discount_percent):
         if self.tray_icon:
@@ -565,14 +569,14 @@ class ProductApp(QMainWindow):
                 QSystemTrayIcon.Information,
                 5000
             )
-            notification = (
+            notification_message = (
                 f"Giá sản phẩm thay đổi (Giảm dưới giá trung bình):\n"
                 f"Sản phẩm: {product.displayName}\n"
                 f"Giá mới: {self.format_price(new_price)}\n"
                 f"Giảm giá so với giá trung bình: {discount_percent}%\n"
                 f"Link: http://samsung.com{product.pdpUrl}"
             )
-            self.notifications.append(notification)
+            self.notifications.append((notification_message, product.modelCode))
 
     def show_new_product_notification(self, product):
         if self.tray_icon:
@@ -587,14 +591,14 @@ class ProductApp(QMainWindow):
                 QSystemTrayIcon.Information,
                 10000
             )
-            notification = (
+            notification_message = (
                 f"Sản phẩm mới:\n"
                 f"Sản phẩm: {product.displayName}\n"
                 f"Giá: {self.format_price(product.promotionPrice)}\n"
                 f"Tình trạng: {product.get_cta_display()}\n"
                 f"Link: http://samsung.com{product.pdpUrl}"
             )
-            self.notifications.append(notification)
+            self.notifications.append((notification_message, product.modelCode))
 
     def format_price(self, price):
         return f"{int(price):,}₫".replace(",", ".")
