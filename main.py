@@ -48,6 +48,7 @@ class Product:
         self.ctaType = ctaType
         self.pviSubtypeName = pviSubtypeName
         self.categorySubTypeEngName = categorySubTypeEngName
+        self.average_price = self.calculate_average_price()
 
     def __eq__(self, other):
         if isinstance(other, Product):
@@ -68,6 +69,18 @@ class Product:
         if self.price > 0 and self.promotionPrice > 0:
             return round((1 - self.promotionPrice / self.price) * 100, 2)
         return 0
+
+    def get_discount_from_average(self):
+        if self.average_price > 0 and self.promotionPrice > 0:
+            return round((1 - self.promotionPrice / self.average_price) * 100, 2)
+        return 0
+
+    def calculate_average_price(self):
+        history = price_history.get_price_history(self.modelCode)
+        if history:
+            prices = [row[2] for row in history]
+            return sum(prices) / len(prices)
+        return self.price
 
     def get_cta_display(self):
         if self.ctaType == "outOfStock":
@@ -225,6 +238,11 @@ class ProductApp(QMainWindow):
         self.auto_refresh_checkbox.stateChanged.connect(self.toggle_auto_refresh)
         layout.addWidget(self.auto_refresh_checkbox)
 
+        # Checkbox sắp xếp theo giảm giá so với giá trung bình
+        self.sort_by_avg_discount_checkbox = QCheckBox("Sắp xếp theo giảm giá so với giá trung bình")
+        self.sort_by_avg_discount_checkbox.stateChanged.connect(self.update_table)
+        layout.addWidget(self.sort_by_avg_discount_checkbox)
+
         # Bảng hiển thị sản phẩm
         self.table = QTableWidget()
         self.table.setColumnCount(6)
@@ -279,6 +297,16 @@ class ProductApp(QMainWindow):
                )
                and (search_text in p.displayName.lower())
         ]
+
+        # Sắp xếp sản phẩm
+        if self.sort_by_avg_discount_checkbox.isChecked():
+            filtered_products.sort(
+                key=lambda x: (-x.get_discount_from_average(), x.price, x.get_cta_display() != "Còn hàng")
+            )
+        else:
+            filtered_products.sort(
+                key=lambda x: (-x.get_discount_percentage(), x.price, x.get_cta_display() != "Còn hàng")
+            )
 
         for row, product in enumerate(filtered_products):
             self.table.insertRow(row)
