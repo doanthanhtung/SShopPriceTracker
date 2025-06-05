@@ -418,9 +418,25 @@ class ProductApp(QMainWindow):
         return image_path, cid
 
     def handle_load_products_result(self, products):
-        old_products = self.products if hasattr(self, 'products') else []
         self.products = products
-        new_products = [p for p in self.products if not any(op.modelCode == p.modelCode for op in old_products)]
+        new_products = [p for p in self.products if not any(op.modelCode == p.modelCode for op in self.products)]
+
+        for product in self.products:
+            # Lấy ctaType cũ từ database
+            old_ctaType = price_history.get_latest_ctaType(product.modelCode)
+            if old_ctaType is not None:
+                # Ánh xạ ctaType cũ thành tình trạng
+                old_cta = "Hết hàng" if old_ctaType == "outOfStock" else "Còn hàng" if old_ctaType in ["whereToBuy",
+                                                                                                       "preOrder"] else old_ctaType
+                new_cta = product.get_cta_display()
+                if old_cta == "Hết hàng" and new_cta == "Còn hàng":
+                    min_price = price_history.get_min_price(product.modelCode)
+                    if min_price is not None and product.promotionPrice <= min_price:
+                        self.show_stock_and_price_notification(product, min_price)
+            else:
+                # Nếu không có dữ liệu cũ trong database, bỏ qua hoặc xử lý như sản phẩm mới
+                pass
+
         self.check_high_discounts(new_products)
         self.update_filters()
         self.update_table()
@@ -448,6 +464,10 @@ class ProductApp(QMainWindow):
                 (message, model_code) for message, model_code in self.notifications
                 if "Sản phẩm mới" in message
             ]
+            stock_and_price_notifications = [
+                (message, model_code) for message, model_code in self.notifications
+                if "Sản phẩm có hàng với giá tốt" in message
+            ]
 
             # Sắp xếp thông báo giảm giá theo phần trăm giảm
             price_change_notifications.sort(
@@ -456,7 +476,7 @@ class ProductApp(QMainWindow):
             )
 
             # Gộp các thông báo đã sắp xếp
-            sorted_notifications = price_change_notifications + new_product_notifications
+            sorted_notifications = price_change_notifications + new_product_notifications + stock_and_price_notifications
 
             # Tạo nội dung email
             for message, model_code in sorted_notifications:
@@ -466,8 +486,8 @@ class ProductApp(QMainWindow):
                     if line and line != "-" * 50:
                         html_notification += "<p>" + line + "</p>"
 
-                # Thêm biểu đồ lịch sử giá cho thông báo giảm giá
-                if "Giá sản phẩm thay đổi (Giảm dưới giá trung bình)" in message:
+                # Thêm biểu đồ lịch sử giá cho thông báo giảm giá hoặc có hàng với giá tốt
+                if "Giá sản phẩm thay đổi (Giảm dưới giá trung bình)" in message or "Sản phẩm có hàng với giá tốt" in message:
                     image_path, cid = self.generate_price_history_image(model_code)
                     if image_path and cid:
                         images.append((image_path, cid))

@@ -117,6 +117,15 @@ def get_average_price(model_code):
     return statistics.mean(prices)
 
 
+def get_min_price(model_code):
+    """Lấy giá thấp nhất của sản phẩm từ cơ sở dữ liệu theo model_code."""
+    history = get_price_history(model_code)
+    if not history:
+        return None
+    prices = [row[2] for row in history]
+    return min(prices)
+
+
 def display_price_history_chart(model_code):
     """
     Hiển thị lịch sử giá của sản phẩm theo model_code dưới dạng biểu đồ đường.
