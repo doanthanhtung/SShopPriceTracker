@@ -1,5 +1,6 @@
 import requests
 import html
+import re
 import matplotlib.pyplot as plt
 from PyQt5 import QtWidgets, QtGui
 from PyQt5.QtCore import QTimer, QUrl, Qt, QThread, pyqtSignal
@@ -69,6 +70,12 @@ def send_email(subject, body, images=None):
         print(f"Đã gửi email: {subject}")
     except Exception as e:
         print(f"Lỗi khi gửi email: {e}")
+
+
+def sanitize_filename(filename):
+    """Loại bỏ hoặc thay thế các ký tự không hợp lệ trong tên file."""
+    invalid_chars = r'[<>:"/\\|?*]'
+    return re.sub(invalid_chars, '_', filename)
 
 
 class Product:
@@ -382,11 +389,11 @@ class ProductApp(QMainWindow):
             print(f"Không có dữ liệu lịch sử giá cho sản phẩm {model_code}")
             return None, None
 
+        fig = plt.figure(figsize=(10, 6))
         dates = [datetime.strptime(row[1], "%Y-%m-%d") for row in history]
         prices = [row[2] for row in history]
         display_name = history[-1][0]
 
-        plt.figure(figsize=(10, 6))
         plt.plot(dates, prices, marker='o', linestyle='-', color='b', label='Giá')
         plt.title(f"Lịch sử giá của {display_name} ({model_code})", fontsize=14)
         plt.xlabel("Ngày", fontsize=12)
@@ -410,12 +417,18 @@ class ProductApp(QMainWindow):
             prev_price = price
 
         plt.tight_layout()
-        image_path = f"price_history_{model_code}.png"
-        plt.savefig(image_path)
-        plt.close()
-        cid = f"price_history_{model_code}"
-        print(f"Đã tạo biểu đồ cho {model_code} tại {image_path}")
-        return image_path, cid
+        safe_model_code = sanitize_filename(model_code)  # Làm sạch model_code
+        image_path = f"price_history_{safe_model_code}.png"
+        cid = f"price_history_{safe_model_code}"
+        try:
+            plt.savefig(image_path)
+            plt.close(fig)  # Đóng figure để giải phóng bộ nhớ
+            print(f"Đã tạo biểu đồ cho {model_code} tại {image_path}")
+            return image_path, cid
+        except Exception as e:
+            print(f"Lỗi khi lưu biểu đồ cho {model_code}: {e}")
+            plt.close(fig)  # Đóng figure ngay cả khi có lỗi
+            return None, None
 
     def handle_load_products_result(self, products):
         self.products = products
