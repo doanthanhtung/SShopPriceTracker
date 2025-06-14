@@ -463,7 +463,7 @@ class ProductApp(QMainWindow):
             ]
             stock_and_price_notifications = [
                 (message, model_code) for message, model_code in self.notifications
-                if "Sản phẩm có hàng với giá tốt" in message
+                if "Tình trạng sản phẩm thay đổi" in message
             ]
 
             # Sắp xếp thông báo giảm giá theo phần trăm giảm
