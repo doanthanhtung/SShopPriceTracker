@@ -463,7 +463,7 @@ class ProductApp(QMainWindow):
             ]
             stock_and_price_notifications = [
                 (message, model_code) for message, model_code in self.notifications
-                if "Tình trạng sản phẩm thay đổi" in message
+                if "Sản phẩm có hàng với giá tốt" in message
             ]
 
             # Sắp xếp thông báo giảm giá theo phần trăm giảm
@@ -473,7 +473,7 @@ class ProductApp(QMainWindow):
             )
 
             # Gộp các thông báo đã sắp xếp
-            sorted_notifications = price_change_notifications + new_product_notifications + stock_and_price_notifications
+            sorted_notifications = stock_and_price_notifications + price_change_notifications + new_product_notifications
 
             # Tạo nội dung email
             for message, model_code in sorted_notifications:
@@ -555,23 +555,29 @@ class ProductApp(QMainWindow):
             old_status = "Còn hàng" if old_ctaType in ["whereToBuy", "preOrder"] else "Hết hàng"
             new_status = "Còn hàng" if new_ctaType in ["whereToBuy", "preOrder"] else "Hết hàng"
             if new_status == "Còn hàng":
-                message = (
-                    f"{product.displayName}\n"
-                    f"Tình trạng: {new_status}"
-                )
-                self.tray_icon.showMessage(
-                    "Tình trạng sản phẩm thay đổi",
-                    message,
-                    QSystemTrayIcon.Information,
-                    10000
-                )
-                notification_message = (
-                    f"Tình trạng sản phẩm thay đổi:\n"
-                    f"Sản phẩm: {product.displayName}\n"
-                    f"Tình trạng mới: {new_status}\n"
-                    f"Link: http://samsung.com{product.pdpUrl}"
-                )
-                self.notifications.append((notification_message, product.modelCode))
+                min_price = price_history.get_min_price(product.modelCode)
+                if min_price is not None and product.promotionPrice <= min_price:
+                    message = (
+                        f"{product.displayName}\n"
+                        f"Tình trạng: {new_status}\n"
+                        f"Giá hiện tại: {self.format_price(product.promotionPrice)}\n"
+                        f"Giá thấp nhất trước đây: {self.format_price(min_price)}"
+                    )
+                    self.tray_icon.showMessage(
+                        "Sản phẩm có hàng với giá tốt",
+                        message,
+                        QSystemTrayIcon.Information,
+                        10000
+                    )
+                    notification_message = (
+                        f"Sản phẩm có hàng với giá tốt:\n"
+                        f"Sản phẩm: {product.displayName}\n"
+                        f"Tình trạng: {new_status}\n"
+                        f"Giá hiện tại: {self.format_price(product.promotionPrice)}\n"
+                        f"Giá thấp nhất trước đây: {self.format_price(min_price)}\n"
+                        f"Link: http://samsung.com{product.pdpUrl}"
+                    )
+                    self.notifications.append((notification_message, product.modelCode))
 
     def show_price_change_notification(self, product, old_price, new_price, discount_percent):
         if self.tray_icon:
