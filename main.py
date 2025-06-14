@@ -193,8 +193,6 @@ def load_products():
                         category_subtype,
                     )
                     unique_products.add(product)
-                    if product.modelCode == "SM-A556ELVAXXV":
-                        print("check")
                     if product.promotionPrice > 0:
                         latest_price = price_history.get_latest_price(product.modelCode)
                         average_price = price_history.get_average_price(product.modelCode)

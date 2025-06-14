@@ -1,6 +1,7 @@
 import sqlite3
 import requests
 from price_history import DB_NAME
+from datetime import datetime
 
 URL_LIST = [
     "https://searchapi.samsung.com/v6/front/epp/v2/product/finder/global?type=01010000&siteCode=vn&start=1&num=99&sort=newest&onlyFilterInfoYN=N&keySummaryYN=N&companyCode=srv&pfType=G",
@@ -18,6 +19,7 @@ URL_LIST = [
     "https://searchapi.samsung.com/v6/front/epp/v2/product/finder/global?type=01040000&siteCode=vn&start=1&num=99&sort=newest&onlyFilterInfoYN=N&keySummaryYN=N&companyCode=srv&pfType=G",
 ]
 
+
 def fetch_product_data(url, timeout=10):
     try:
         response = requests.get(url, timeout=timeout)
@@ -26,6 +28,7 @@ def fetch_product_data(url, timeout=10):
     except requests.RequestException as e:
         print(f"Có lỗi xảy ra khi lấy dữ liệu từ {url}: {e}")
         return None
+
 
 def get_api_products():
     api_model_codes = []
@@ -42,6 +45,7 @@ def get_api_products():
                         api_model_codes.append(model_code)
     return api_model_codes
 
+
 def get_all_database_products():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -54,6 +58,38 @@ def get_all_database_products():
     products = cursor.fetchall()
     conn.close()
     return products
+
+
+def update_ctaType_to_outOfStock(model_code, displayName):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    # Lấy giá mới nhất (nếu có) để cập nhật
+    cursor.execute(
+        """
+        SELECT price
+        FROM price_history
+        WHERE model_code = ? AND date = (SELECT MAX(date) FROM price_history WHERE model_code = ?)
+        """,
+        (model_code, model_code)
+    )
+    result = cursor.fetchone()
+    price = result[0] if result else 0
+
+    # Cập nhật hoặc thêm bản ghi mới với ctaType = "outOfStock"
+    cursor.execute(
+        """
+        INSERT OR REPLACE INTO price_history (model_code, displayName, date, price, ctaType)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (model_code, displayName, today, price, "outOfStock")
+    )
+
+    conn.commit()
+    conn.close()
+    print(f"Đã cập nhật ctaType của {model_code} ({displayName}) thành 'outOfStock'")
+
 
 def main():
     # Lấy danh sách model_code từ API
@@ -68,13 +104,15 @@ def main():
         if model_code not in api_model_codes:
             missing_products.append((model_code, displayName))
 
-    # In ra các sản phẩm thỏa mãn điều kiện
+    # In ra và cập nhật ctaType cho các sản phẩm thỏa mãn
     if missing_products:
         print("Các sản phẩm có trong database nhưng không có trong API:")
         for model_code, displayName in missing_products:
             print(f"Model Code: {model_code}, Display Name: {displayName}")
+            update_ctaType_to_outOfStock(model_code, displayName)
     else:
         print("Không có sản phẩm nào thỏa mãn điều kiện.")
+
 
 if __name__ == "__main__":
     main()
