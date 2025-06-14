@@ -60,15 +60,31 @@ def get_all_database_products():
     return products
 
 
+def get_latest_ctaType(model_code):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT ctaType
+        FROM price_history
+        WHERE model_code = ? AND date = (SELECT MAX(date) FROM price_history WHERE model_code = ?)
+        """,
+        (model_code, model_code)
+    )
+    result = cursor.fetchone()
+    conn.close()
+    return result[0] if result else None
+
+
 def update_ctaType_to_outOfStock(model_code, displayName):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     today = datetime.now().strftime("%Y-%m-%d")
 
-    # Lấy giá mới nhất (nếu có) để cập nhật
+    # Lấy giá và ctaType mới nhất (nếu có)
     cursor.execute(
         """
-        SELECT price
+        SELECT price, ctaType
         FROM price_history
         WHERE model_code = ? AND date = (SELECT MAX(date) FROM price_history WHERE model_code = ?)
         """,
@@ -76,19 +92,23 @@ def update_ctaType_to_outOfStock(model_code, displayName):
     )
     result = cursor.fetchone()
     price = result[0] if result else 0
+    current_ctaType = result[1] if result else None
 
-    # Cập nhật hoặc thêm bản ghi mới với ctaType = "outOfStock"
-    cursor.execute(
-        """
-        INSERT OR REPLACE INTO price_history (model_code, displayName, date, price, ctaType)
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        (model_code, displayName, today, price, "outOfStock")
-    )
+    # Chỉ cập nhật nếu ctaType mới nhất khác "outOfStock"
+    if current_ctaType != "outOfStock":
+        cursor.execute(
+            """
+            INSERT OR REPLACE INTO price_history (model_code, displayName, date, price, ctaType)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (model_code, displayName, today, price, "outOfStock")
+        )
+        conn.commit()
+        print(f"Đã cập nhật ctaType của {model_code} ({displayName}) thành 'outOfStock'")
+    # else:
+    #     print(f"Bỏ qua {model_code} ({displayName}) vì ctaType mới nhất đã là 'outOfStock'")
 
-    conn.commit()
     conn.close()
-    print(f"Đã cập nhật ctaType của {model_code} ({displayName}) thành 'outOfStock'")
 
 
 def main():
@@ -106,9 +126,9 @@ def main():
 
     # In ra và cập nhật ctaType cho các sản phẩm thỏa mãn
     if missing_products:
-        print("Các sản phẩm có trong database nhưng không có trong API:")
+        # print("Các sản phẩm có trong database nhưng không có trong API:")
         for model_code, displayName in missing_products:
-            print(f"Model Code: {model_code}, Display Name: {displayName}")
+            # print(f"Model Code: {model_code}, Display Name: {displayName}")
             update_ctaType_to_outOfStock(model_code, displayName)
     else:
         print("Không có sản phẩm nào thỏa mãn điều kiện.")
