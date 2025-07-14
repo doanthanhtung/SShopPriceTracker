@@ -30,7 +30,7 @@ from datetime import datetime
 
 # Cấu hình email
 EMAIL_SENDER = "luongphongtrung01@gmail.com"
-EMAIL_PASSWORD = "pdtu qgjf jvss igkq"
+EMAIL_PASSWORD = "ejtj igpz tbun egob"
 EMAIL_RECEIVERS = ["doanthanhtung.pc@gmail.com"]
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
