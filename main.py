@@ -471,7 +471,7 @@ class ProductApp(QMainWindow):
             )
 
             # Gộp các thông báo đã sắp xếp
-            sorted_notifications = stock_and_price_notifications + price_change_notifications + new_product_notifications
+            sorted_notifications = price_change_notifications + stock_and_price_notifications + new_product_notifications
 
             # Tạo nội dung email
             for message, model_code in sorted_notifications:
@@ -554,7 +554,10 @@ class ProductApp(QMainWindow):
             new_status = "Còn hàng" if new_ctaType in ["whereToBuy", "preOrder"] else "Hết hàng"
             if new_status == "Còn hàng":
                 min_price = price_history.get_min_price(product.modelCode)
-                if min_price is not None and product.promotionPrice <= min_price:
+                average_price = price_history.get_average_price(product.modelCode)
+                if (min_price is not None and product.promotionPrice <= min_price) and \
+                        (
+                                average_price is not None and product.promotionPrice <= average_price * 0.85):  # Giá hiện tại thấp hơn 15% giá trung bình
                     message = (
                         f"{product.displayName}\n"
                         f"Tình trạng: {new_status}\n"
