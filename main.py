@@ -202,7 +202,7 @@ def load_products():
                         else:
                             latest_ctaType = price_history.get_latest_ctaType(product.modelCode)
                             if latest_price != product.promotionPrice:
-                                if average_price and product.promotionPrice < average_price:
+                                if average_price and product.promotionPrice < average_price * 0.9:  # Giảm ít nhất 10%
                                     discount_percent = round((1 - product.promotionPrice / average_price) * 100, 2)
                                     if hasattr(ProductApp, 'instance'):
                                         ProductApp.instance.show_price_change_notification(
