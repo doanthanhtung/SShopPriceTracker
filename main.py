@@ -134,7 +134,7 @@ URL_LIST_SRV = [
 # sinhvien
 # vn_doanhnghiepd
 #vn_chinhphud
-code = "sinhvien"
+code = "vn_doanhnghiepd"
 URL_LIST_LOYALTY = [
     (
                 "https://searchapi.samsung.com/v6/front/epp/v2/product/finder/global?type=01010000&siteCode=vn&start=1&num=99&sort=newest&onlyFilterInfoYN=N&keySummaryYN=N&companyCode=%s&pfType=G" % code),
