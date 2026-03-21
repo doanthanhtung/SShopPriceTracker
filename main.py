@@ -134,7 +134,7 @@ URL_LIST_SRV = [
 # sinhvien
 # vn_doanhnghiepd
 #vn_chinhphud
-code = "vn_taichinhd"
+code = "vn_corporate"
 URL_LIST_LOYALTY = [
     (
                 "https://searchapi.samsung.com/v6/front/epp/v2/product/finder/global?type=01010000&siteCode=vn&start=1&num=99&sort=newest&onlyFilterInfoYN=N&keySummaryYN=N&companyCode=%s&pfType=G" % code),
@@ -389,7 +389,7 @@ class ProductApp(QMainWindow):
             filtered_products = [
                 p
                 for p in self.products
-                if (not self.price_diff_checkbox.isChecked() or p.price_diff <= 50000)
+                if (not self.price_diff_checkbox.isChecked() or p.price_diff <= 500000)
                 and (selected_cta == "Tất cả" or p.get_cta_display() == selected_cta)
                 and (
                         selected_category == "Tất cả"
