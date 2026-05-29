@@ -1,0 +1,97 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: sshop_price_tracker
+      POSTGRES_USER: sshop
+      POSTGRES_PASSWORD: sshop
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sshop -d sshop_price_tracker"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      SSHOP_ENVIRONMENT: local
+      SSHOP_DEBUG: "true"
+      SSHOP_DATABASE_URL: postgresql+asyncpg://sshop:sshop@postgres:5432/sshop_price_tracker
+      SSHOP_REDIS_URL: redis://redis:6379/0
+      SSHOP_LOG_LEVEL: INFO
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    image: node:22-alpine
+    working_dir: /app/frontend
+    command: sh -c "npm install && npm run dev -- --hostname 0.0.0.0"
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000/api/v1
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - frontend_node_modules:/app/frontend/node_modules
+      - frontend_next:/app/frontend/.next
+    depends_on:
+      - backend
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: celery -A src.infrastructure.tasks.celery_app.celery_app worker --loglevel=INFO
+    environment:
+      SSHOP_ENVIRONMENT: local
+      SSHOP_DATABASE_URL: postgresql+asyncpg://sshop:sshop@postgres:5432/sshop_price_tracker
+      SSHOP_REDIS_URL: redis://redis:6379/0
+      SSHOP_LOG_LEVEL: INFO
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  beat:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: celery -A src.infrastructure.tasks.celery_app.celery_app beat --loglevel=INFO
+    environment:
+      SSHOP_ENVIRONMENT: local
+      SSHOP_DATABASE_URL: postgresql+asyncpg://sshop:sshop@postgres:5432/sshop_price_tracker
+      SSHOP_REDIS_URL: redis://redis:6379/0
+      SSHOP_LOG_LEVEL: INFO
+      SSHOP_SYNC_INTERVAL_SECONDS: 300
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  frontend_node_modules:
+  frontend_next:

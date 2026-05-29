@@ -1,0 +1,51 @@
+Metadata-Version: 2.4
+Name: sshop-price-tracker
+Version: 0.1.0
+Summary: Production-grade price tracker web application.
+Requires-Python: >=3.12
+Description-Content-Type: text/markdown
+Requires-Dist: alembic>=1.13.3
+Requires-Dist: asyncpg>=0.29.0
+Requires-Dist: beautifulsoup4>=4.12.3
+Requires-Dist: celery>=5.4.0
+Requires-Dist: fastapi>=0.115.0
+Requires-Dist: httpx>=0.27.2
+Requires-Dist: loguru>=0.7.2
+Requires-Dist: pydantic>=2.9.2
+Requires-Dist: pydantic-settings>=2.5.2
+Requires-Dist: python-jose[cryptography]>=3.3.0
+Requires-Dist: redis>=5.1.0
+Requires-Dist: sqlalchemy[asyncio]>=2.0.35
+Requires-Dist: structlog>=24.4.0
+Requires-Dist: tenacity>=9.0.0
+Requires-Dist: uvicorn[standard]>=0.30.6
+Provides-Extra: dev
+Requires-Dist: mypy>=1.11.2; extra == "dev"
+Requires-Dist: pytest>=8.3.3; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.24.0; extra == "dev"
+Requires-Dist: ruff>=0.6.9; extra == "dev"
+
+# SShop Price Tracker
+
+Production-grade web refactor of the original desktop price tracker.
+
+## Backend
+
+Run the backend stack:
+
+```bash
+docker compose up --build
+```
+
+API health check:
+
+```bash
+curl http://localhost:8000/api/v1/health
+```
+
+Run Alembic migrations from the host after installing dependencies:
+
+```bash
+alembic -c backend/alembic.ini upgrade head
+```
+

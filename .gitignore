@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Runtime data
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# Build artifacts
+build/
+dist/
+
+# Node / frontend
+node_modules/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+
+# Local tooling
+.idea/
+.vscode/
+.playwright-cli/
+
+# Environment files
+.env
+.env.*
+!.env.example
