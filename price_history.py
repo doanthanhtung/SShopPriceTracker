@@ -7,7 +7,7 @@ DB_NAME = "price_history.db"
 
 
 def init_db():
-    """Khởi tạo database nếu chưa tồn tại với các trường model_code, displayName, date, price và ctaType."""
+    """Khởi tạo dữ liệu lịch sử giá và các đăng ký thông báo có hàng."""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute(
@@ -22,8 +22,77 @@ def init_db():
         )
         """
     )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS availability_subscriptions (
+            model_code TEXT PRIMARY KEY,
+            display_name TEXT NOT NULL,
+            subscribed_at TEXT NOT NULL
+        )
+        """
+    )
     conn.commit()
     conn.close()
+
+
+def subscribe_to_availability(model_code, display_name):
+    """Đăng ký nhận đúng một thông báo khi sản phẩm có hàng.
+
+    ``model_code`` là khóa chính để cùng một sản phẩm không thể bị đăng ký
+    nhiều lần, kể cả sau khi ứng dụng được khởi động lại.
+    """
+    now = datetime.now().isoformat(timespec="seconds")
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT INTO availability_subscriptions (model_code, display_name, subscribed_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(model_code) DO UPDATE SET
+            display_name = excluded.display_name
+        """,
+        (model_code, display_name, now),
+    )
+    conn.commit()
+    conn.close()
+
+
+def unsubscribe_from_availability(model_code):
+    """Hủy đăng ký thông báo có hàng cho một sản phẩm."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        "DELETE FROM availability_subscriptions WHERE model_code = ?", (model_code,)
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_availability_subscriptions():
+    """Trả về các mã sản phẩm đang được theo dõi."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT model_code FROM availability_subscriptions")
+    subscriptions = {row[0] for row in cursor.fetchall()}
+    conn.close()
+    return subscriptions
+
+
+def consume_availability_subscription(model_code):
+    """Đánh dấu một đăng ký đã được xử lý và trả về liệu nó có tồn tại.
+
+    Xóa trước khi hiển thị thông báo giúp một sản phẩm chỉ báo một lần, kể cả
+    khi có nhiều lượt làm mới gần nhau.
+    """
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        "DELETE FROM availability_subscriptions WHERE model_code = ?", (model_code,)
+    )
+    consumed = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return consumed
 
 
 def save_price_history(model_code, displayName, price, ctaType):

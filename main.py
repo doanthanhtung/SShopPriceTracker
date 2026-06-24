@@ -104,6 +104,7 @@ class Product:
         self.ctaType = ctaType
         self.pviSubtypeName = pviSubtypeName
         self.categorySubTypeEngName = categorySubTypeEngName
+        self.averagePrice = price_history.get_average_price(modelCode)
 
     def __eq__(self, other):
         if isinstance(other, Product):
@@ -123,6 +124,12 @@ class Product:
     def get_discount_percentage(self):
         if self.price > 0 and self.promotionPrice > 0:
             return round((1 - self.promotionPrice / self.price) * 100, 2)
+        return 0
+
+    def get_discount_from_average(self):
+        """Phần trăm giá hiện tại thấp hơn giá trung bình trong lịch sử."""
+        if self.averagePrice and self.averagePrice > 0 and self.promotionPrice > 0:
+            return round((1 - self.promotionPrice / self.averagePrice) * 100, 2)
         return 0
 
     def get_cta_display(self):
@@ -216,9 +223,27 @@ def load_products():
                         price_history.save_price_history(
                             product.modelCode, product.displayName, product.promotionPrice, product.ctaType
                         )
+    return sort_products(unique_products)
+
+
+def sort_products(products, by_average_discount=False):
+    """Sắp xếp danh sách mà không thay đổi thứ tự của dữ liệu gốc.
+
+    Khi chưa có lịch sử giá, mức giảm so với trung bình là 0%, vì vậy các
+    sản phẩm đó không được ưu tiên nhầm dựa trên giá niêm yết.
+    """
+    discount_getter = (
+        lambda product: product.get_discount_from_average()
+        if by_average_discount
+        else product.get_discount_percentage()
+    )
     return sorted(
-        unique_products,
-        key=lambda x: (-x.get_discount_percentage(), x.price, x.get_cta_display() != "Còn hàng"),
+        products,
+        key=lambda product: (
+            -discount_getter(product),
+            product.price,
+            product.get_cta_display() != "Còn hàng",
+        ),
     )
 
 
@@ -279,6 +304,15 @@ class ProductApp(QMainWindow):
         self.auto_refresh_checkbox.stateChanged.connect(self.toggle_auto_refresh)
         layout.addWidget(self.auto_refresh_checkbox)
 
+        self.sort_by_average_discount_checkbox = QCheckBox(
+            "Sắp xếp theo giảm giá so với giá trung bình"
+        )
+        self.sort_by_average_discount_checkbox.setToolTip(
+            "Ưu tiên sản phẩm có giá hiện tại thấp hơn giá trung bình lịch sử nhiều nhất."
+        )
+        self.sort_by_average_discount_checkbox.stateChanged.connect(self.update_table)
+        layout.addWidget(self.sort_by_average_discount_checkbox)
+
         self.table = QTableWidget()
         self.table.setColumnCount(6)
         self.table.setHorizontalHeaderLabels(
@@ -295,6 +329,7 @@ class ProductApp(QMainWindow):
         self.status_bar.addWidget(self.status_label)
 
         self.products = []
+        self.availability_subscriptions = price_history.get_availability_subscriptions()
         self.on_refresh()
         self.timer = QTimer()
         self.timer.timeout.connect(self.on_refresh)
@@ -331,6 +366,10 @@ class ProductApp(QMainWindow):
                )
                and (search_text in p.displayName.lower())
         ]
+        filtered_products = sort_products(
+            filtered_products,
+            by_average_discount=self.sort_by_average_discount_checkbox.isChecked(),
+        )
 
         for row, product in enumerate(filtered_products):
             self.table.insertRow(row)
@@ -346,32 +385,49 @@ class ProductApp(QMainWindow):
                 item = QTableWidgetItem(value)
                 item.setForeground(color)
                 self.table.setItem(row, col, item)
-            button_text = "Mua ngay" if product.get_cta_display() == "Còn hàng" else "Thông báo khi có hàng"
+            button_text = self.get_product_action_text(product)
             button = QPushButton(button_text)
             button.clicked.connect(lambda checked, p=product, b=button: self.on_button_click(p, b))
+            if product.get_cta_display() != "Còn hàng":
+                button.setToolTip("Bạn sẽ nhận một thông báo khi sản phẩm có hàng.")
             self.table.setCellWidget(row, 4, button)
             history_button = QPushButton("Xem lịch sử giá")
             history_button.clicked.connect(lambda checked, p=product: self.show_price_history(p.modelCode))
             self.table.setCellWidget(row, 5, history_button)
 
     def show_notification(self, product):
+        message = f"{product.displayName} đã có hàng. Mua ngay!"
         if self.tray_icon:
             self.tray_icon.showMessage(
                 "Sản phẩm có hàng!",
-                f"{product.displayName} đã có hàng. Mua ngay!",
+                message,
                 QSystemTrayIcon.Information,
                 50000
             )
+        self.notifications.append((
+            "Sản phẩm đã có hàng:\n"
+            f"Sản phẩm: {product.displayName}\n"
+            f"Giá hiện tại: {self.format_price(product.promotionPrice)}\n"
+            f"Link: http://samsung.com{product.pdpUrl}",
+            product.modelCode,
+        ))
 
     def on_button_click(self, product, button):
         if product.get_cta_display() == "Còn hàng":
             QDesktopServices.openUrl(QUrl("http://samsung.com" + product.pdpUrl))
+            return
+
+        if product.modelCode in self.availability_subscriptions:
+            price_history.unsubscribe_from_availability(product.modelCode)
+            self.availability_subscriptions.remove(product.modelCode)
+            button.setText("Thông báo khi có hàng")
+            self.status_label.setText(f"Đã hủy theo dõi: {product.displayName}")
         else:
-            if button.text() == "Thông báo khi có hàng":
-                button.setText("Hủy thông báo")
-                self.check_product_availability(product, button)
-            else:
-                button.setText("Thông báo khi có hàng")
+            price_history.subscribe_to_availability(product.modelCode, product.displayName)
+            self.availability_subscriptions.add(product.modelCode)
+            button.setText("Hủy theo dõi")
+            self.status_label.setText(f"Đã bật thông báo có hàng: {product.displayName}")
+        self.status_label.setStyleSheet("color: green;")
 
     def on_refresh(self):
         self.refresh_button.setEnabled(False)
@@ -432,14 +488,10 @@ class ProductApp(QMainWindow):
 
     def handle_load_products_result(self, products):
         self.products = products
+        self.process_availability_subscriptions(products)
 
         self.update_filters()
         self.update_table()
-        for row in range(self.table.rowCount()):
-            button = self.table.cellWidget(row, 4)
-            if button and button.text() == "Hủy thông báo":
-                product = self.products[row]
-                self.check_product_availability(product, button)
         self.refresh_button.setEnabled(True)
         self.status_label.setText("Đã tải xong dữ liệu từ samsung.com")
         self.status_label.setStyleSheet("color: green;")
@@ -463,6 +515,10 @@ class ProductApp(QMainWindow):
                 (message, model_code) for message, model_code in self.notifications
                 if "Sản phẩm có hàng với giá tốt" in message
             ]
+            availability_notifications = [
+                (message, model_code) for message, model_code in self.notifications
+                if "Sản phẩm đã có hàng" in message
+            ]
 
             # Sắp xếp thông báo giảm giá theo phần trăm giảm
             price_change_notifications.sort(
@@ -471,7 +527,12 @@ class ProductApp(QMainWindow):
             )
 
             # Gộp các thông báo đã sắp xếp
-            sorted_notifications = price_change_notifications + stock_and_price_notifications + new_product_notifications
+            sorted_notifications = (
+                availability_notifications
+                + price_change_notifications
+                + stock_and_price_notifications
+                + new_product_notifications
+            )
 
             # Tạo nội dung email
             for message, model_code in sorted_notifications:
@@ -514,10 +575,23 @@ class ProductApp(QMainWindow):
         self.cta_filter.clear()
         self.cta_filter.addItems(["Tất cả"] + sorted(statuses - {"Tất cả"}))
 
-    def check_product_availability(self, product, button):
+    def get_product_action_text(self, product):
         if product.get_cta_display() == "Còn hàng":
-            self.show_notification(product)
-            button.setText("Mua ngay")
+            return "Mua ngay"
+        if product.modelCode in self.availability_subscriptions:
+            return "Hủy theo dõi"
+        return "Thông báo khi có hàng"
+
+    def process_availability_subscriptions(self, products):
+        """Thông báo một lần cho các sản phẩm người dùng đang theo dõi."""
+        for product in products:
+            if (
+                product.modelCode in self.availability_subscriptions
+                and product.get_cta_display() == "Còn hàng"
+                and price_history.consume_availability_subscription(product.modelCode)
+            ):
+                self.availability_subscriptions.remove(product.modelCode)
+                self.show_notification(product)
 
     def show_price_history(self, model_code):
         price_history.display_price_history_chart(model_code)
