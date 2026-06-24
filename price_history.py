@@ -1,6 +1,8 @@
 import sqlite3
 from datetime import datetime
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+from matplotlib.ticker import FuncFormatter
 import statistics
 
 DB_NAME = "price_history.db"
@@ -195,54 +197,149 @@ def get_min_price(model_code):
     return min(prices)
 
 
-def display_price_history_chart(model_code):
-    """
-    Hiển thị lịch sử giá của sản phẩm theo model_code dưới dạng biểu đồ đường.
-    Chỉ hiển thị giá tại các mốc giá thay đổi.
-    """
+def format_price(price):
+    """Định dạng giá VND nhất quán trên biểu đồ."""
+    return f"{int(round(price)):,} ₫".replace(",", ".")
+
+
+def create_price_history_figure(model_code):
+    """Tạo biểu đồ lịch sử giá có thể dùng cho giao diện và email."""
     history = get_price_history(model_code)
-
     if not history:
-        print(f"Không tìm thấy lịch sử giá cho sản phẩm có mã {model_code}")
-        return
+        return None
 
-    # Tách dữ liệu thành các danh sách riêng
     dates = [datetime.strptime(row[1], "%Y-%m-%d") for row in history]
     prices = [row[2] for row in history]
-    display_name = history[-1][0]  # Lấy tên sản phẩm từ bản ghi cuối cùng
+    display_name = history[-1][0]
+    average_price = statistics.mean(prices)
+    lowest_price = min(prices)
+    current_price = prices[-1]
+    first_price = prices[0]
 
-    # Tạo biểu đồ
-    plt.figure(figsize=(10, 6))
-    plt.plot(dates, prices, marker='o', linestyle='-', color='b', label='Giá')
+    plt.rcParams["font.family"] = "DejaVu Sans"
+    fig, ax = plt.subplots(figsize=(11.5, 6.8), facecolor="#F8FAFC")
+    ax.set_facecolor("#FFFFFF")
 
-    # Định dạng biểu đồ
-    plt.title(f"Lịch sử giá của {display_name} ({model_code})", fontsize=14)
-    plt.xlabel("Ngày", fontsize=12)
-    plt.ylabel("Giá (VND)", fontsize=12)
-    plt.grid(True, linestyle='--', alpha=0.7)
-
-    # Định dạng trục y với dấu chấm phân cách hàng nghìn
-    plt.gca().get_yaxis().set_major_formatter(
-        plt.FuncFormatter(lambda x, loc: "{:,.0f}".format(x).replace(',', '.'))
+    ax.step(dates, prices, where="mid", color="#2563EB", linewidth=2.6, label="Giá ghi nhận")
+    ax.fill_between(dates, prices, [min(prices)] * len(prices), step="mid", color="#DBEAFE", alpha=0.72)
+    ax.axhline(
+        average_price,
+        color="#64748B",
+        linewidth=1.4,
+        linestyle=(0, (4, 3)),
+        label=f"Trung bình: {format_price(average_price)}",
     )
 
-    # Xoay nhãn ngày để dễ đọc
-    plt.xticks(rotation=45)
+    unique_annotation_indexes = []
+    for index in (0, prices.index(lowest_price), len(prices) - 1):
+        if index not in unique_annotation_indexes:
+            unique_annotation_indexes.append(index)
 
-    # Hiển thị giá trị chỉ tại các điểm giá thay đổi
-    prev_price = None
-    for i, price in enumerate(prices):
-        if prev_price is None or price != prev_price:
-            plt.annotate(
-                f"{price:,.0f}".replace(',', '.'),
-                (dates[i], prices[i]),
-                textcoords="offset points",
-                xytext=(0, 10),
-                ha='center'
-            )
-        prev_price = price
+    for index in unique_annotation_indexes:
+        is_current = index == len(prices) - 1
+        color = "#16A34A" if is_current else "#2563EB"
+        ax.scatter(dates[index], prices[index], s=70, color=color, edgecolor="#FFFFFF", linewidth=1.8, zorder=3)
+        label = "Hiện tại" if is_current else "Thấp nhất" if prices[index] == lowest_price else "Bắt đầu"
+        ax.annotate(
+            f"{label}\n{format_price(prices[index])}",
+            (dates[index], prices[index]),
+            xytext=(0, 14),
+            textcoords="offset points",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+            color="#0F172A",
+            bbox={"boxstyle": "round,pad=0.35", "facecolor": "#FFFFFF", "edgecolor": "#CBD5E1"},
+        )
 
-    plt.tight_layout()
+    price_range = max(prices) - lowest_price
+    vertical_padding = max(price_range * 0.18, max(current_price, 1) * 0.04)
+    ax.set_ylim(max(0, lowest_price - vertical_padding), max(prices) + vertical_padding)
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda value, _: format_price(value)))
+    locator = mdates.AutoDateLocator(minticks=3, maxticks=7)
+    ax.xaxis.set_major_locator(locator)
+    ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
+    ax.grid(axis="y", color="#E2E8F0", linewidth=0.9)
+    ax.grid(axis="x", visible=False)
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.spines[["left", "bottom"]].set_color("#CBD5E1")
+    ax.tick_params(colors="#475569", labelsize=9)
+    ax.set_ylabel("Giá bán", color="#475569", labelpad=12)
+    ax.set_xlabel("Thời điểm ghi nhận", color="#475569", labelpad=10)
+
+    title = display_name if len(display_name) <= 72 else f"{display_name[:69]}..."
+    fig.suptitle(title, x=0.08, y=0.97, ha="left", fontsize=15, fontweight="bold", color="#0F172A")
+    ax.set_title(
+        f"Mã {model_code}  •  Hiện tại {format_price(current_price)}  •  "
+        f"Thay đổi {format_price(current_price - first_price)}",
+        loc="left",
+        fontsize=9.5,
+        color="#64748B",
+        pad=18,
+    )
+    ax.legend(loc="upper right", frameon=False, fontsize=9)
+    fig.tight_layout(rect=(0.04, 0.04, 0.98, 0.91))
+
+    hover_marker = ax.scatter([], [], s=110, color="#F59E0B", edgecolor="#FFFFFF", linewidth=2, zorder=4)
+    hover_tooltip = ax.annotate(
+        "",
+        xy=(0, 0),
+        xytext=(16, -16),
+        textcoords="offset points",
+        fontsize=9,
+        color="#FFFFFF",
+        bbox={"boxstyle": "round,pad=0.45", "facecolor": "#0F172A", "edgecolor": "none", "alpha": 0.95},
+        arrowprops={"arrowstyle": "-", "color": "#64748B", "linewidth": 1},
+        zorder=5,
+    )
+    hover_tooltip.set_visible(False)
+    hover_marker.set_visible(False)
+    date_numbers = mdates.date2num(dates)
+
+    def on_hover(event):
+        if event.inaxes != ax or event.x is None or event.y is None:
+            if hover_tooltip.get_visible():
+                hover_tooltip.set_visible(False)
+                hover_marker.set_visible(False)
+                fig.canvas.draw_idle()
+            return
+
+        point_pixels = [ax.transData.transform((date_number, price)) for date_number, price in zip(date_numbers, prices)]
+        closest_index = min(
+            range(len(point_pixels)),
+            key=lambda index: (point_pixels[index][0] - event.x) ** 2 + (point_pixels[index][1] - event.y) ** 2,
+        )
+        distance = ((point_pixels[closest_index][0] - event.x) ** 2 + (point_pixels[closest_index][1] - event.y) ** 2) ** 0.5
+        if distance > 18:
+            if hover_tooltip.get_visible():
+                hover_tooltip.set_visible(False)
+                hover_marker.set_visible(False)
+                fig.canvas.draw_idle()
+            return
+
+        status = "Còn hàng" if history[closest_index][3] in ["whereToBuy", "preOrder"] else "Hết hàng"
+        hover_tooltip.xy = (dates[closest_index], prices[closest_index])
+        hover_tooltip.set_text(
+            f"{dates[closest_index].strftime('%d/%m/%Y')}\n"
+            f"{format_price(prices[closest_index])}\n"
+            f"{status}"
+        )
+        hover_tooltip.set_visible(True)
+        hover_marker.set_offsets([(date_numbers[closest_index], prices[closest_index])])
+        hover_marker.set_visible(True)
+        fig.canvas.draw_idle()
+
+    callback_id = fig.canvas.mpl_connect("motion_notify_event", on_hover)
+    fig._price_history_hover = (hover_marker, hover_tooltip, callback_id)
+    return fig
+
+
+def display_price_history_chart(model_code):
+    """Hiển thị biểu đồ lịch sử giá theo phong cách thống nhất."""
+    fig = create_price_history_figure(model_code)
+    if fig is None:
+        print(f"Không tìm thấy lịch sử giá cho sản phẩm có mã {model_code}")
+        return
     plt.show()
 
 

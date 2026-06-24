@@ -1,7 +1,9 @@
 import os
+import sqlite3
 import tempfile
 import unittest
 
+import matplotlib.pyplot as plt
 import price_history
 from main import Product, sort_products
 
@@ -52,6 +54,33 @@ class AvailabilitySubscriptionTests(unittest.TestCase):
         product = self.make_product("NO-HISTORY", 500_000)
 
         self.assertEqual(0, product.get_discount_from_average())
+
+    def test_price_history_figure_has_summary_and_price_axis(self):
+        connection = sqlite3.connect(self.database.name)
+        try:
+            connection.executemany(
+                """
+                INSERT INTO price_history (model_code, displayName, date, price, ctaType)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                [
+                    ("MODEL-CHART", "Sản phẩm biểu đồ", "2026-01-01", 1_200_000, "whereToBuy"),
+                    ("MODEL-CHART", "Sản phẩm biểu đồ", "2026-01-10", 900_000, "whereToBuy"),
+                    ("MODEL-CHART", "Sản phẩm biểu đồ", "2026-01-20", 1_000_000, "whereToBuy"),
+                ],
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+        figure = price_history.create_price_history_figure("MODEL-CHART")
+
+        self.assertIsNotNone(figure)
+        self.assertEqual("Sản phẩm biểu đồ", figure._suptitle.get_text())
+        self.assertEqual("Giá bán", figure.axes[0].get_ylabel())
+        self.assertGreaterEqual(len(figure.axes[0].collections), 2)
+        self.assertTrue(hasattr(figure, "_price_history_hover"))
+        plt.close(figure)
 
     @staticmethod
     def make_product(model_code, promotion_price):

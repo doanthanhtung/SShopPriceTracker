@@ -26,7 +26,6 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.image import MIMEImage
 import os
-from datetime import datetime
 
 # Cấu hình email
 EMAIL_SENDER = "luongphongtrung01@gmail.com"
@@ -440,44 +439,16 @@ class ProductApp(QMainWindow):
 
     def generate_price_history_image(self, model_code):
         """Tạo và lưu biểu đồ lịch sử giá dưới dạng ảnh, trả về đường dẫn file và CID."""
-        history = price_history.get_price_history(model_code)
-        if not history:
+        fig = price_history.create_price_history_figure(model_code)
+        if fig is None:
             print(f"Không có dữ liệu lịch sử giá cho sản phẩm {model_code}")
             return None, None
 
-        fig = plt.figure(figsize=(10, 6))
-        dates = [datetime.strptime(row[1], "%Y-%m-%d") for row in history]
-        prices = [row[2] for row in history]
-        display_name = history[-1][0]
-
-        plt.plot(dates, prices, marker='o', linestyle='-', color='b', label='Giá')
-        plt.title(f"Lịch sử giá của {display_name} ({model_code})", fontsize=14)
-        plt.xlabel("Ngày", fontsize=12)
-        plt.ylabel("Giá (VND)", fontsize=12)
-        plt.grid(True, linestyle='--', alpha=0.7)
-        plt.gca().get_yaxis().set_major_formatter(
-            plt.FuncFormatter(lambda x, loc: "{:,.0f}".format(x).replace(',', '.'))
-        )
-        plt.xticks(rotation=45)
-
-        prev_price = None
-        for i, price in enumerate(prices):
-            if prev_price is None or price != prev_price:
-                plt.annotate(
-                    f"{price:,.0f}".replace(',', '.'),
-                    (dates[i], prices[i]),
-                    textcoords="offset points",
-                    xytext=(0, 10),
-                    ha='center'
-                )
-            prev_price = price
-
-        plt.tight_layout()
         safe_model_code = sanitize_filename(model_code)  # Làm sạch model_code
         image_path = f"price_history_{safe_model_code}.png"
         cid = f"price_history_{safe_model_code}"
         try:
-            plt.savefig(image_path)
+            fig.savefig(image_path, dpi=160, bbox_inches="tight", facecolor=fig.get_facecolor())
             plt.close(fig)  # Đóng figure để giải phóng bộ nhớ
             print(f"Đã tạo biểu đồ cho {model_code} tại {image_path}")
             return image_path, cid
