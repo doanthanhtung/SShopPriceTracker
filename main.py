@@ -8,6 +8,7 @@ from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
+    QHBoxLayout,
     QVBoxLayout,
     QPushButton,
     QComboBox,
@@ -270,11 +271,60 @@ class ProductApp(QMainWindow):
 
     def init_ui(self):
         self.setWindowTitle("Danh sách sản phẩm")
-        self.setGeometry(100, 100, 900, 500)
+        self.setGeometry(100, 100, 1180, 680)
+        self.setMinimumSize(980, 560)
+        self.setStyleSheet(
+            """
+            QWidget {
+                font-size: 12px;
+            }
+            QLabel {
+                color: #2f3a45;
+            }
+            QLineEdit,
+            QComboBox {
+                min-height: 32px;
+                padding: 4px 9px;
+                border: 1px solid #c9d1d9;
+                border-radius: 6px;
+                background: #ffffff;
+                font-size: 12px;
+                selection-background-color: #2563eb;
+            }
+            QLineEdit:focus,
+            QComboBox:focus {
+                border-color: #2563eb;
+            }
+            QPushButton {
+                min-height: 28px;
+                padding: 4px 10px;
+                border: 1px solid #c9d1d9;
+                border-radius: 6px;
+                background: #f6f8fa;
+                text-align: center;
+            }
+            QPushButton:hover {
+                background: #eef2f7;
+            }
+            QPushButton:pressed {
+                background: #e5eaf1;
+            }
+            QTableWidget {
+                gridline-color: #e5e7eb;
+                selection-background-color: #dbeafe;
+                selection-color: #111827;
+            }
+            """
+        )
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         layout = QVBoxLayout(central_widget)
+        layout.setContentsMargins(14, 14, 14, 10)
+        layout.setSpacing(10)
+
+        filter_layout = QHBoxLayout()
+        filter_layout.setSpacing(10)
 
         self.search_bar = QLineEdit()
         self.search_bar.setPlaceholderText("Tìm kiếm theo tên sản phẩm...")
@@ -282,18 +332,15 @@ class ProductApp(QMainWindow):
         self.search_timer.setSingleShot(True)
         self.search_timer.timeout.connect(self.update_table)
         self.search_bar.textChanged.connect(self.start_search_timer)
-        layout.addWidget(QLabel("Tìm kiếm:"))
-        layout.addWidget(self.search_bar)
-
-        self.category_filter = QComboBox()
-        self.category_filter.currentIndexChanged.connect(self.update_table)
-        layout.addWidget(QLabel("Lọc theo danh mục:"))
-        layout.addWidget(self.category_filter)
+        filter_layout.addWidget(QLabel("Tìm kiếm:"))
+        filter_layout.addWidget(self.search_bar, 1)
 
         self.cta_filter = QComboBox()
+        self.cta_filter.setMinimumWidth(170)
         self.cta_filter.currentIndexChanged.connect(self.update_table)
-        layout.addWidget(QLabel("Lọc theo tình trạng:"))
-        layout.addWidget(self.cta_filter)
+        filter_layout.addWidget(QLabel("Tình trạng:"))
+        filter_layout.addWidget(self.cta_filter)
+        layout.addLayout(filter_layout)
 
         self.refresh_button = QPushButton("Làm mới")
         self.refresh_button.clicked.connect(self.on_refresh)
@@ -317,8 +364,7 @@ class ProductApp(QMainWindow):
         self.table.setHorizontalHeaderLabels(
             ["Tên sản phẩm", "Giá", "Giảm giá", "Tình trạng", "Chức năng", "Lịch sử giá"]
         )
-        self.table.horizontalHeader().setStretchLastSection(True)
-        self.table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
+        self.configure_table_columns()
         layout.addWidget(self.table)
 
         self.status_bar = QStatusBar()
@@ -348,22 +394,16 @@ class ProductApp(QMainWindow):
         self.table.setHorizontalHeaderLabels(
             ["Tên sản phẩm", "Giá", "Giảm giá", "Tình trạng", "Chức năng", "Lịch sử giá"]
         )
-        self.table.horizontalHeader().setStretchLastSection(True)
-        self.table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
+        self.configure_table_columns()
 
         selected_cta = self.cta_filter.currentText()
-        selected_category = self.category_filter.currentText()
         search_text = self.search_bar.text().lower()
 
         filtered_products = [
             p
             for p in self.products
             if (selected_cta == "Tất cả" or p.get_cta_display() == selected_cta)
-               and (
-                       selected_category == "Tất cả"
-                       or (p.categorySubTypeEngName and p.categorySubTypeEngName == selected_category)
-               )
-               and (search_text in p.displayName.lower())
+            and (search_text in p.displayName.lower())
         ]
         filtered_products = sort_products(
             filtered_products,
@@ -383,16 +423,38 @@ class ProductApp(QMainWindow):
             ):
                 item = QTableWidgetItem(value)
                 item.setForeground(color)
+                if col == 0:
+                    item.setTextAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+                else:
+                    item.setTextAlignment(Qt.AlignCenter)
                 self.table.setItem(row, col, item)
             button_text = self.get_product_action_text(product)
             button = QPushButton(button_text)
+            button.setMinimumHeight(28)
+            button.setMaximumHeight(30)
             button.clicked.connect(lambda checked, p=product, b=button: self.on_button_click(p, b))
             if product.get_cta_display() != "Còn hàng":
                 button.setToolTip("Bạn sẽ nhận một thông báo khi sản phẩm có hàng.")
             self.table.setCellWidget(row, 4, button)
             history_button = QPushButton("Xem lịch sử giá")
+            history_button.setMinimumHeight(28)
+            history_button.setMaximumHeight(30)
             history_button.clicked.connect(lambda checked, p=product: self.show_price_history(p.modelCode))
             self.table.setCellWidget(row, 5, history_button)
+
+    def configure_table_columns(self):
+        header = self.table.horizontalHeader()
+        header.setStretchLastSection(False)
+        header.setSectionResizeMode(0, QtWidgets.QHeaderView.Stretch)
+        for col in range(1, 6):
+            header.setSectionResizeMode(col, QtWidgets.QHeaderView.Fixed)
+
+        self.table.setColumnWidth(1, 126)
+        self.table.setColumnWidth(2, 84)
+        self.table.setColumnWidth(3, 92)
+        self.table.setColumnWidth(4, 152)
+        self.table.setColumnWidth(5, 128)
+        self.table.verticalHeader().setDefaultSectionSize(40)
 
     def show_notification(self, product):
         message = f"{product.displayName} đã có hàng. Mua ngay!"
@@ -535,14 +597,9 @@ class ProductApp(QMainWindow):
                         os.remove(image_path)
 
     def update_filters(self):
-        categories = {"Tất cả"}
         statuses = {"Tất cả"}
         for p in self.products:
-            if p.categorySubTypeEngName:
-                categories.add(p.categorySubTypeEngName)
             statuses.add(p.get_cta_display())
-        self.category_filter.clear()
-        self.category_filter.addItems(["Tất cả"] + sorted(categories - {"Tất cả"}))
         self.cta_filter.clear()
         self.cta_filter.addItems(["Tất cả"] + sorted(statuses - {"Tất cả"}))
 

@@ -5,7 +5,7 @@
 ## Chức năng chính
 
 - Tải danh sách sản phẩm từ nhiều danh mục Samsung Việt Nam.
-- Tìm kiếm, lọc theo danh mục và trạng thái còn/hết hàng.
+- Tìm kiếm và lọc theo trạng thái còn/hết hàng.
 - Làm mới thủ công hoặc tự động mỗi 5 phút.
 - Mở nhanh trang sản phẩm để mua hàng.
 - Lưu lịch sử giá và trạng thái vào SQLite.
