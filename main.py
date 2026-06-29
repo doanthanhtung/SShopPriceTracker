@@ -134,6 +134,7 @@ URL_LIST_SRV = [
 # sinhvien
 # vn_doanhnghiepd
 #vn_chinhphud
+#vn_corporate
 code = "vn_corporate"
 URL_LIST_LOYALTY = [
     (
@@ -389,7 +390,7 @@ class ProductApp(QMainWindow):
             filtered_products = [
                 p
                 for p in self.products
-                if (not self.price_diff_checkbox.isChecked() or p.price_diff <= 500000)
+                if (not self.price_diff_checkbox.isChecked() or p.price_diff <= 1500000)
                 and (selected_cta == "Tất cả" or p.get_cta_display() == selected_cta)
                 and (
                         selected_category == "Tất cả"
