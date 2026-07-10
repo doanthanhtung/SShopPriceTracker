@@ -136,7 +136,7 @@ URL_LIST_SRV = [
 #vn_chinhphud
 #vn_corporate
 #vn_giaoducd //acc Duy tcq.edu@gmail.com
-code = "vn_corporate"
+code = "vn_giaoducd"
 URL_LIST_LOYALTY = [
     (
                 "https://searchapi.samsung.com/v6/front/epp/v2/product/finder/global?type=01010000&siteCode=vn&start=1&num=99&sort=newest&onlyFilterInfoYN=N&keySummaryYN=N&companyCode=%s&pfType=G" % code),
@@ -330,14 +330,18 @@ class ProductApp(QMainWindow):
             self.sort_by_avg_discount_checkbox.stateChanged.connect(self.update_table)
             layout.addWidget(self.sort_by_avg_discount_checkbox)
 
+            self.sort_by_price_diff_checkbox = QCheckBox("Sắp xếp theo chênh lệch giá")
+            self.sort_by_price_diff_checkbox.stateChanged.connect(self.update_table)
+            layout.addWidget(self.sort_by_price_diff_checkbox)
+
             self.price_diff_checkbox = QCheckBox("Hiển thị sản phẩm có chênh lệch giá <= 50.000đ")
             self.price_diff_checkbox.stateChanged.connect(self.update_table)
             layout.addWidget(self.price_diff_checkbox)
 
             self.table = QTableWidget()
-            self.table.setColumnCount(6)
+            self.table.setColumnCount(7)
             self.table.setHorizontalHeaderLabels(
-                ["Tên sản phẩm", "Giá", "Giảm giá", "Tình trạng", "Chức năng", "Lịch sử giá"]
+                ["Tên sản phẩm", "Giá", "Giảm giá", "Chênh lệch giá", "Tình trạng", "Chức năng", "Lịch sử giá"]
             )
             self.table.horizontalHeader().setStretchLastSection(True)
             self.table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
@@ -377,9 +381,9 @@ class ProductApp(QMainWindow):
     def update_table(self):
         try:
             self.table.setRowCount(0)
-            self.table.setColumnCount(6)
+            self.table.setColumnCount(7)
             self.table.setHorizontalHeaderLabels(
-                ["Tên sản phẩm", "Giá", "Giảm giá", "Tình trạng", "Chức năng", "Lịch sử giá"]
+                ["Tên sản phẩm", "Giá", "Giảm giá", "Chênh lệch giá", "Tình trạng", "Chức năng", "Lịch sử giá"]
             )
             self.table.horizontalHeader().setStretchLastSection(True)
             self.table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
@@ -400,7 +404,11 @@ class ProductApp(QMainWindow):
                 and (search_text in p.displayName.lower())
             ]
 
-            if self.sort_by_avg_discount_checkbox.isChecked():
+            if self.sort_by_price_diff_checkbox.isChecked():
+                filtered_products.sort(
+                    key=lambda x: (x.price_diff, -x.get_discount_percentage(), x.price, x.get_cta_display() != "Còn hàng")
+                )
+            elif self.sort_by_avg_discount_checkbox.isChecked():
                 filtered_products.sort(
                     key=lambda x: (-x.get_discount_from_average(), x.price, x.get_cta_display() != "Còn hàng")
                 )
@@ -417,6 +425,7 @@ class ProductApp(QMainWindow):
                             product.displayName,
                             product.priceDisplay,
                             f"{product.get_discount_percentage()}%",
+                            f"{product.price_diff:,.0f}đ".replace(",", "."),
                             product.get_cta_display(),
                         ]
                 ):
@@ -426,10 +435,10 @@ class ProductApp(QMainWindow):
                 button_text = "Mua ngay" if product.get_cta_display() == "Còn hàng" else "Thông báo khi có hàng"
                 button = QPushButton(button_text)
                 button.clicked.connect(lambda checked, p=product, b=button: self.on_button_click(p, b))
-                self.table.setCellWidget(row, 4, button)
+                self.table.setCellWidget(row, 5, button)
                 history_button = QPushButton("Xem lịch sử giá")
                 history_button.clicked.connect(lambda checked, p=product: self.show_price_history(p.modelCode))
-                self.table.setCellWidget(row, 5, history_button)
+                self.table.setCellWidget(row, 6, history_button)
             logging.info(f"Table updated with {len(filtered_products)} products")
         except Exception as e:
             logging.error(f"Error in update_table: {e}")
@@ -482,7 +491,7 @@ class ProductApp(QMainWindow):
             self.update_filters()
             self.update_table()
             for row in range(self.table.rowCount()):
-                button = self.table.cellWidget(row, 4)
+                button = self.table.cellWidget(row, 5)
                 if button and button.text() == "Hủy thông báo":
                     product = self.products[row]
                     self.check_product_availability(product, button)
