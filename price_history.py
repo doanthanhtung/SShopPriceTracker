@@ -1,11 +1,13 @@
 import sqlite3
+import sys
+from pathlib import Path
 from datetime import datetime
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from matplotlib.ticker import FuncFormatter
 import statistics
 
-DB_NAME = "price_history.db"
+DB_NAME = str(Path(sys.executable).resolve().parent / "price_history.db") if getattr(sys, "frozen", False) else "price_history.db"
 
 
 def init_db():
@@ -181,11 +183,13 @@ def get_latest_ctaType(model_code):
 
 def get_average_price(model_code):
     """Tính giá trung bình của sản phẩm dựa trên lịch sử giá."""
-    history = get_price_history(model_code)
-    if not history:
-        return None
-    prices = [row[2] for row in history]
-    return statistics.mean(prices)
+    conn = sqlite3.connect(DB_NAME)
+    try:
+        return conn.execute(
+            "SELECT AVG(price) FROM price_history WHERE model_code = ?", (model_code,)
+        ).fetchone()[0]
+    finally:
+        conn.close()
 
 
 def get_min_price(model_code):
@@ -202,7 +206,7 @@ def format_price(price):
     return f"{int(round(price)):,} ₫".replace(",", ".")
 
 
-def create_price_history_figure(model_code):
+def create_price_history_figure(model_code, headless=False):
     """Tạo biểu đồ lịch sử giá có thể dùng cho giao diện và email."""
     history = get_price_history(model_code)
     if not history:
@@ -216,8 +220,15 @@ def create_price_history_figure(model_code):
     current_price = prices[-1]
     first_price = prices[0]
 
-    plt.rcParams["font.family"] = "DejaVu Sans"
-    fig, ax = plt.subplots(figsize=(11.5, 6.8), facecolor="#F8FAFC")
+    if headless:
+        # An email worker must never create a Qt canvas or a pyplot window.
+        from matplotlib.figure import Figure
+        from matplotlib.backends.backend_agg import FigureCanvasAgg
+        fig = Figure(figsize=(11.5, 6.8), facecolor="#F8FAFC")
+        FigureCanvasAgg(fig)
+        ax = fig.subplots()
+    else:
+        fig, ax = plt.subplots(figsize=(11.5, 6.8), facecolor="#F8FAFC")
     ax.set_facecolor("#FFFFFF")
 
     ax.step(dates, prices, where="mid", color="#2563EB", linewidth=2.6, label="Giá ghi nhận")
@@ -280,6 +291,9 @@ def create_price_history_figure(model_code):
     ax.legend(loc="upper right", frameon=False, fontsize=9)
     fig.tight_layout(rect=(0.04, 0.04, 0.98, 0.91))
 
+    if headless:
+        return fig
+
     hover_marker = ax.scatter([], [], s=110, color="#F59E0B", edgecolor="#FFFFFF", linewidth=2, zorder=4)
     hover_tooltip = ax.annotate(
         "",
@@ -340,6 +354,17 @@ def display_price_history_chart(model_code):
     if fig is None:
         print(f"Không tìm thấy lịch sử giá cho sản phẩm có mã {model_code}")
         return
+    manager = fig.canvas.manager
+    manager.set_window_title(f"Lịch sử giá · {model_code}")
+    toolbar = manager.toolbar
+    if toolbar is not None and hasattr(toolbar, "clear"):
+        # Keep export, but remove matplotlib's editing/navigation controls and
+        # raw cursor coordinates from this read-only product history window.
+        toolbar.clear()
+        toolbar.setMovable(False)
+        toolbar.setFloatable(False)
+        save_action = toolbar.addAction("Lưu ảnh", toolbar.save_figure)
+        save_action.setToolTip("Lưu biểu đồ lịch sử giá thành ảnh")
     plt.show()
 
 
